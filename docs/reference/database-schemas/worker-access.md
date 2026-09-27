@@ -94,6 +94,24 @@ not recreate a missing file. Preparing a new database directory and quarantining
 orphaned sidecars require the existing schema-maintenance owner; later permission
 hardening never recreates a removed directory.
 
+Cached shared-state actors retain their opening path independently of client
+aliases. Cold path binding retires vanished aliases while preserving live hardlinks;
+warm admission checks use the retained identity maps rather than polling the
+filesystem. Reuse and command admission check the actor's known opening-path
+binding even after its original client closes. An entry retains the lifecycle
+owner's physical path admission separately from the original caller's schema scope.
+Each requesting caller still needs complete live admission. A retired secondary
+alias closes only its client, so healthy peers can continue while
+that client's callbacks settle. Losing the actor's opening path requires its active
+work to settle before replacement. A lazy actor also retains its factory's
+existing-file identity until its first writable native open. That cold open refuses
+a missing or replaced source before acquiring schema authority or creating files,
+including device identity and audit writers. An external removal that has not yet
+reached cold path binding does not authorize recreating the actor's opening path.
+This prevents Doctor and plugin migrations from recreating retired paths or
+acquiring leases in the wrong database. Existing update
+drivers and stored schemas need no migration.
+
 Each SQLite broker worker admits up to 128 running and queued requests. A busy
 worker's admission queue does not consume another worker's request capacity;
 independent workers continue serving their databases. Requests on the same worker

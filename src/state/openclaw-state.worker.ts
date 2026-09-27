@@ -6,7 +6,10 @@ import { assertNoActiveSqliteReaders } from "../infra/sqlite-reader-lifecycle.js
 import { assertTransactionUsable } from "../infra/sqlite-transaction.js";
 import { SQLITE_WORKER_PREPARE_COMMAND } from "../infra/sqlite-worker-contract.js";
 import { requestSqliteWorkerOperationAdmission } from "../infra/sqlite-worker-operation-admission.js";
-import { getSqliteWorkerStateContext } from "../infra/sqlite-worker-state-context.js";
+import {
+  getSqliteWorkerStateContext,
+  withSqliteWorkerExistingDatabase,
+} from "../infra/sqlite-worker-state-context.js";
 import {
   isPluginStateWorkerCommand,
   pluginStateWorkerOperations,
@@ -71,9 +74,17 @@ export function createSqliteWorkerBackend(
 
 export function openExistingSqliteWorkerBackend(
   _input: undefined,
-  context: { databasePath: string },
+  context: { databasePath: string; existingIdentity: string },
 ): OpenClawStateWorkerBackend {
-  return createSharedStateWorkerBackend(context);
+  const backend = createSharedStateWorkerBackend(context);
+  return {
+    ...backend,
+    execute(command) {
+      return withSqliteWorkerExistingDatabase(context.databasePath, context.existingIdentity, () =>
+        backend.execute(command),
+      );
+    },
+  };
 }
 
 function createSharedStateWorkerBackend(

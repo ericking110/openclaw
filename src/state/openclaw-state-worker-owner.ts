@@ -17,7 +17,10 @@ import {
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { runInDetachedAsyncContext } from "../shared/async-work-scope.js";
 import { resolveGlobalSingleton } from "../shared/global-singleton.js";
+import { isStateDatabaseReadAdmissionInvalidatedError } from "./openclaw-state-db-async-lifecycle.js";
 import {
+  captureOpenClawStateDatabaseReadAdmission,
+  openClawStateDatabaseCache,
   publishOpenClawStateDatabaseWorkerAdmission,
   registerOpenClawStateDatabaseAsyncResource,
   registerOpenClawStateDatabaseLifecycleListener,
@@ -32,6 +35,7 @@ import type {
   OpenClawStateWorkerOperationOptions as OperationOptions,
 } from "./openclaw-state-worker-contract.js";
 import {
+  assertOpenClawStateWorkerActorPath,
   captureOpenClawStateWorkerOpeningGuard,
   runWithCapturedWorkerContext,
 } from "./openclaw-state-worker-operation.js";
@@ -303,6 +307,55 @@ function createSharedStateWorkerOwner() {
     }
     await attempt.pending;
   };
+  const inspectInvalidEntry = (
+    entry: Entry,
+  ): { kind: "actor" | "client"; error: unknown } | undefined => {
+    const actor = entry.actor;
+    let kind: "actor" | "client" = "actor";
+    try {
+      if (entry.bound && actor) {
+        assertOpenClawStateWorkerActorPath(actor);
+        if (entry.store && isSqliteWorkerStoreAvailable(entry.store)) {
+          kind = "client";
+        }
+      }
+      entry.pathAdmission.assertCurrent();
+    } catch (error) {
+      if (!isStateDatabaseReadAdmissionInvalidatedError(error)) {
+        throw error;
+      }
+      // An intact path's invalidation affects the actor's whole physical generation.
+      if (
+        kind === "client" &&
+        openClawStateDatabaseCache.getKnownOpenClawStateDatabaseIdentity(
+          entry.context.admission.databasePath,
+        )?.key === actor?.key
+      ) {
+        kind = "actor";
+      }
+      return { kind, error };
+    }
+    return undefined;
+  };
+  const retireInvalidEntry = (entry: Entry): { pending: Promise<void> | undefined } | undefined => {
+    const invalid = inspectInvalidEntry(entry);
+    if (!invalid) {
+      return undefined;
+    }
+    if (invalid.kind === "actor") {
+      if (hasActiveActorOperations(entry)) {
+        throw invalid.error;
+      }
+      return {
+        pending: entry.actor
+          ? retireActor(entry.actor, entry.context.admission.identity)
+          : retire(entry),
+      };
+    }
+    const closing = retire(entry);
+    // The retirement owner joins this client after its callback can finish using healthy peers.
+    return { pending: entry.activeOperations === 0 ? closing : undefined };
+  };
   async function close(identity?: DatabasePathIdentity): Promise<void> {
     for (const entry of stores.values()) {
       if (matches(entry, identity)) {
@@ -383,10 +436,19 @@ function createSharedStateWorkerOwner() {
       let entry: Entry | undefined;
       for (;;) {
         for (const candidate of stores) {
+          if (!matches(candidate, admission.identity)) {
+            continue;
+          }
+          const retirement = retireInvalidEntry(candidate);
+          if (retirement) {
+            if (retirement.pending) {
+              await retirement.pending;
+            }
+            return this.open(context, options);
+          }
           if (
-            matches(candidate, admission.identity) &&
-            (candidate.context.existingSchemaPath !== context.existingSchemaPath ||
-              candidate.source.moduleUrl.href !== source.moduleUrl.href)
+            candidate.context.existingSchemaPath !== context.existingSchemaPath ||
+            candidate.source.moduleUrl.href !== source.moduleUrl.href
           ) {
             await retire(candidate);
             assertAdmission();
@@ -403,6 +465,9 @@ function createSharedStateWorkerOwner() {
             matches(retiringEntry, admission.identity) &&
             retiringEntry.context.maintenanceScope === context.maintenanceScope
           ) {
+            if (inspectInvalidEntry(retiringEntry)?.kind === "client") {
+              continue;
+            }
             if (!attempt.pending) {
               // Another retained owner may have completed the failed admission's cleanup.
               if (!hasPendingCleanup(retiringEntry)) {
@@ -476,6 +541,7 @@ function createSharedStateWorkerOwner() {
         const admitted: Entry = {
           source,
           context,
+          pathAdmission: captureOpenClawStateDatabaseReadAdmission(admission.databasePath),
           openingAdmission: openingGuard.admission,
           existingOnly,
           activeOperations: 0,
@@ -559,6 +625,13 @@ function createSharedStateWorkerOwner() {
           );
         }
         throw error;
+      }
+      const retirement = retireInvalidEntry(entry);
+      if (retirement) {
+        if (retirement.pending) {
+          await retirement.pending;
+        }
+        return this.open(context, options);
       }
       stores.delete(entry);
       stores.add(entry);

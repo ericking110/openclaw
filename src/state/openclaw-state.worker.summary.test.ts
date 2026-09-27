@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   acquireStateDatabaseSchemaLease,
@@ -19,7 +18,10 @@ import {
   createOpenClawTestState,
   type OpenClawTestState,
 } from "../test-utils/openclaw-test-state.js";
-import { closeOpenClawStateDatabaseAsync } from "./openclaw-state-db-cache.js";
+import {
+  closeOpenClawStateDatabaseAsync,
+  isOpenClawStateDatabaseOpen,
+} from "./openclaw-state-db-cache.js";
 import { openOpenClawStateDatabase } from "./openclaw-state-db.js";
 import { captureOpenClawStateWorkerContext } from "./openclaw-state-worker-context.js";
 import {
@@ -48,7 +50,10 @@ it("retains the shared native handle until its last actor closes and preserves r
     createSqliteWorkerBackend(undefined, { databasePath: context.admission.databasePath }),
   );
   const second = runWithSqliteWorkerStateContext(context, () =>
-    openExistingSqliteWorkerBackend(undefined, { databasePath: context.admission.databasePath }),
+    openExistingSqliteWorkerBackend(undefined, {
+      databasePath: context.admission.databasePath,
+      existingIdentity: captureOpenClawStateWorkerContext().admission.identity.key,
+    }),
   );
   backends.add(first).add(second);
   await first[SQLITE_WORKER_PREPARE_COMMAND]?.("pluginState.register");
@@ -122,11 +127,15 @@ it("retains the shared native handle until its last actor closes and preserves r
 it.each(["kv", "health"] as const)(
   "retains a promoted KV actor's native handle when %s closes first",
   async (firstToClose) => {
+    const databasePath = openOpenClawStateDatabase().path;
+    await closeOpenClawStateDatabaseAsync();
     const context = captureOpenClawStateWorkerContext();
-    const databasePath = context.admission.databasePath;
     const key = { pluginId: "borrow-fixture", namespace: "shared", key: "answer" };
     const kv = runWithSqliteWorkerStateContext(context, () =>
-      openExistingSqliteWorkerBackend(undefined, { databasePath }),
+      openExistingSqliteWorkerBackend(undefined, {
+        databasePath,
+        existingIdentity: context.admission.identity.key,
+      }),
     );
     backends.add(kv);
     await kv[SQLITE_WORKER_PREPARE_COMMAND]?.("pluginState.lookup");
@@ -135,7 +144,7 @@ it.each(["kv", "health"] as const)(
         kv.execute({ type: "pluginState.lookup", input: key }),
       ),
     ).toEqual({ ok: true, value: undefined });
-    expect(existsSync(databasePath)).toBe(false);
+    expect(isOpenClawStateDatabaseOpen(databasePath)).toBe(false);
     const stages: string[] = [];
     withStateDatabaseSchemaMaintenance({ databasePath }, () => {
       const admission = createSqliteWorkerOperationAdmission((request, grant) => {
@@ -261,12 +270,20 @@ it.each(["kv", "health"] as const)(
 it.each(["config.health.patch", "diagnostic.register"] as const)(
   "retains %s writes from existing-only actors until last close and durably reopens",
   async (operation) => {
+    const databasePath = openOpenClawStateDatabase().path;
+    await closeOpenClawStateDatabaseAsync();
     const context = captureOpenClawStateWorkerContext();
     const first = runWithSqliteWorkerStateContext(context, () =>
-      openExistingSqliteWorkerBackend(undefined, { databasePath: context.admission.databasePath }),
+      openExistingSqliteWorkerBackend(undefined, {
+        databasePath,
+        existingIdentity: context.admission.identity.key,
+      }),
     );
     const second = runWithSqliteWorkerStateContext(context, () =>
-      openExistingSqliteWorkerBackend(undefined, { databasePath: context.admission.databasePath }),
+      openExistingSqliteWorkerBackend(undefined, {
+        databasePath,
+        existingIdentity: context.admission.identity.key,
+      }),
     );
     backends.add(first).add(second);
     await first[SQLITE_WORKER_PREPARE_COMMAND]?.("config.health.read");
@@ -275,8 +292,8 @@ it.each(["config.health.patch", "diagnostic.register"] as const)(
       runWithSqliteWorkerStateContext(context, () =>
         first.execute({ type: "config.health.read", input: { artifactPreserving: false } }),
       ),
-    ).toEqual({ state: {}, basis: {} });
-    expect(existsSync(context.admission.databasePath)).toBe(false);
+    ).toEqual({ state: { entries: {} }, basis: {} });
+    expect(isOpenClawStateDatabaseOpen(databasePath)).toBe(false);
 
     const scope = "tests/health-native-borrow";
     const write = (backend: typeof first, key: string) =>

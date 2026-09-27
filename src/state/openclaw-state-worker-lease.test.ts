@@ -40,6 +40,18 @@ vi.mock("../shared/global-singleton.js", async (importOriginal) => {
 });
 
 vi.mock("./openclaw-state-db-cache.js", () => ({
+  captureOpenClawStateDatabaseReadAdmission: (databasePath: string) => ({
+    databasePath,
+    coordinationKey: "synthetic-state",
+    identity: { key: "synthetic-state", canonicalPath: databasePath },
+    assertCurrent: () => {},
+  }),
+  openClawStateDatabaseCache: {
+    getKnownOpenClawStateDatabaseIdentity: () => ({
+      key: "capture-lease-fixture",
+      canonicalPath: "/synthetic/state.sqlite",
+    }),
+  },
   getOpenClawStateDatabaseTerminalFailureAsync: async () => undefined,
   publishOpenClawStateDatabaseWorkerAdmission: () => {},
   registerOpenClawStateDatabaseAsyncResource: () => () => {},

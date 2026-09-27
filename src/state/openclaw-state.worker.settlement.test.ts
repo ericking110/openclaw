@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, unlinkSync } from "node:fs";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { getNodeSqliteKysely, iterateSqliteQuerySync } from "../infra/kysely-sync.js";
 import { requireNodeSqlite } from "../infra/node-sqlite.js";
@@ -46,12 +46,22 @@ it("rechecks a foreign commit before the next worker operation", async () => {
 });
 
 it("retires an existing-only idle actor without opening its missing database", async () => {
+  const databasePath = openOpenClawStateDatabase().path;
+  await closeOpenClawStateDatabaseAsync();
   const context = captureOpenClawStateWorkerContext();
+  unlinkSync(databasePath);
   const backend = runWithSqliteWorkerStateContext(context, () =>
-    openExistingSqliteWorkerBackend(undefined, { databasePath: context.admission.databasePath }),
+    openExistingSqliteWorkerBackend(undefined, {
+      databasePath,
+      existingIdentity: context.admission.identity.key,
+    }),
   );
   try {
-    expect(backend.execute({ type: "database.inspectIdle", input: undefined })).toBe("retire");
+    expect(
+      runWithSqliteWorkerStateContext(context, () =>
+        backend.execute({ type: "database.inspectIdle", input: undefined }),
+      ),
+    ).toBe("retire");
     expect(existsSync(context.admission.databasePath)).toBe(false);
   } finally {
     await backend.close();
