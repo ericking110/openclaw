@@ -22,6 +22,7 @@ type ConfigRevisionKeyRow = Pick<
 export type GatewayConfigRevisionProjector = {
   projectRawHash: (hash: string) => string;
   projectResolvedHash: (hash: string) => string;
+  hashResponseSessionBearer: (bearer: string) => string;
 };
 
 const CONFIG_REVISION_SINGLETON_ID = 1;
@@ -101,6 +102,7 @@ function createGatewayConfigRevisionProjector(key: Uint8Array): GatewayConfigRev
   return {
     projectRawHash: (hash) => projectRevision(key, CONFIG_REVISION_RAW_DOMAIN, hash),
     projectResolvedHash: (hash) => projectRevision(key, CONFIG_REVISION_RESOLVED_DOMAIN, hash),
+    hashResponseSessionBearer: (bearer) => hashGatewayResponseSessionBearer(bearer, key),
   };
 }
 
@@ -123,13 +125,8 @@ export function loadGatewayConfigRevisionProjector(
   return createGatewayConfigRevisionProjector(loadGatewayConfigRevisionKey(options));
 }
 
-export function hashGatewayResponseSessionBearer(
-  bearer: string,
-  options: OpenClawStateDatabaseOptions,
-): string {
-  const scopeKey = createHmac("sha256", loadGatewayConfigRevisionKey(options))
-    .update("openresponses-session-scope", "utf8")
-    .digest();
+function hashGatewayResponseSessionBearer(bearer: string, key: Uint8Array): string {
+  const scopeKey = createHmac("sha256", key).update("openresponses-session-scope", "utf8").digest();
   try {
     return `hmac-sha256:v1:${createHmac("sha256", scopeKey).update(bearer, "utf8").digest("hex")}`;
   } finally {

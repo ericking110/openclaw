@@ -99,14 +99,11 @@ import {
   type ToolChoiceConstraint,
 } from "./openai-tool-choice.js";
 import { buildAgentPrompt } from "./openresponses-prompt.js";
-import {
-  hashResponseSessionBearer,
-  lookupResponseSession,
-  rememberResponseSession,
-} from "./openresponses-session-store.js";
+import { lookupResponseSession, rememberResponseSession } from "./openresponses-session-store.js";
 import type { ResponseSessionScope } from "./openresponses-session-store.types.js";
 import { createAssistantOutputItem, createFunctionCallOutputItem } from "./openresponses-shape.js";
 import { authorizeGatewaySessionCreation } from "./operator-role-policy.js";
+import type { GatewayContextResolver } from "./server-methods/types.js";
 
 const DEFAULT_BODY_BYTES = 20 * 1024 * 1024;
 const DEFAULT_MAX_URL_PARTS = 8;
@@ -120,30 +117,36 @@ function normalizeResponseSessionScope(scope: ResponseSessionScope): ResponseSes
   };
 }
 
-async function resolveResponseSessionAuthSubject(params: {
+function resolveResponseSessionAuthSubject(params: {
   req: IncomingMessage;
   auth: ResolvedGatewayAuth;
   requestAuth: AuthorizedGatewayHttpRequest;
-}): Promise<string> {
+  resolveGatewayContext?: GatewayContextResolver;
+}): string {
   // Proxy-verified identity owns continuation; forwarded bearers are unverified.
   if (params.requestAuth.authMethod === "trusted-proxy") {
     return `trusted-proxy:${params.requestAuth.user}`;
   }
   const bearer = getBearerToken(params.req);
   if (bearer) {
-    return `bearer:${await hashResponseSessionBearer(bearer)}`;
+    const projector = params.resolveGatewayContext?.()?.configRevisionProjector;
+    if (!projector) {
+      throw new Error("OpenResponses bearer scope requires a current Gateway context.");
+    }
+    return `bearer:${projector.hashResponseSessionBearer(bearer)}`;
   }
   return `gateway-auth:${params.auth.mode}`;
 }
 
-async function createResponseSessionScope(params: {
+function createResponseSessionScope(params: {
   req: IncomingMessage;
   auth: ResolvedGatewayAuth;
   requestAuth: AuthorizedGatewayHttpRequest;
   agentId: string;
-}): Promise<ResponseSessionScope> {
+  resolveGatewayContext?: GatewayContextResolver;
+}): ResponseSessionScope {
   return normalizeResponseSessionScope({
-    authSubject: await resolveResponseSessionAuthSubject(params),
+    authSubject: resolveResponseSessionAuthSubject(params),
     agentId: params.agentId,
     requestedSessionKey: getHeader(params.req, "x-openclaw-session-key"),
   });
@@ -436,11 +439,12 @@ export async function handleOpenResponsesHttpRequest(
     }
     throw err;
   }
-  const responseSessionScope = await createResponseSessionScope({
+  const responseSessionScope = createResponseSessionScope({
     req,
     auth: opts.auth,
     requestAuth: handled.requestAuth,
     agentId: resolved.agentId,
+    resolveGatewayContext: opts.resolveGatewayContext,
   });
   // Resolve session key: reuse previous_response_id only when it matches the
   // same auth-subject/agent/requested-session scope as the current request.
@@ -448,7 +452,6 @@ export async function handleOpenResponsesHttpRequest(
     ? await lookupResponseSession({
         ...responseSessionScope,
         responseId: payload.previous_response_id,
-        nowMs: Date.now(),
       })
     : undefined;
   if (handled.requestAuth.hasCurrentClientAuthority?.() === false) {
@@ -508,9 +511,8 @@ export async function handleOpenResponsesHttpRequest(
       usage,
     });
   const rememberSession = () =>
-    rememberResponseSession(
-      { ...responseSessionScope, responseId, sessionKey, nowMs: Date.now() },
-      () => assertGatewayHttpRequestCurrent(handled.requestAuth),
+    rememberResponseSession({ ...responseSessionScope, responseId, sessionKey }, () =>
+      assertGatewayHttpRequestCurrent(handled.requestAuth),
     );
   const outputItemId = `msg_${randomUUID()}`;
   const streamMaxTokens = payload.max_output_tokens;

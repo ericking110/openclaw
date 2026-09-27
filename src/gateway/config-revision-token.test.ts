@@ -9,10 +9,7 @@ import {
   openOpenClawStateDatabase,
 } from "../state/openclaw-state-db.js";
 import { getOpenClawStateRuntimeSchema } from "../state/openclaw-state-schema-compatibility.js";
-import {
-  hashGatewayResponseSessionBearer,
-  loadGatewayConfigRevisionProjector,
-} from "./config-revision-token.js";
+import { loadGatewayConfigRevisionProjector } from "./config-revision-token.js";
 
 const tempDirs = useAutoCleanupTempDirTracker(afterEach);
 
@@ -42,12 +39,14 @@ describe("Gateway config revision tokens", () => {
       .prepare("SELECT hmac_key FROM config_revision_keys WHERE id = 1")
       .get() as { hmac_key: Uint8Array };
     const bearer = "synthetic-operator-password";
-    const subject = hashGatewayResponseSessionBearer(bearer, options);
+    const subject = projector.hashResponseSessionBearer(bearer);
     expect(subject).toMatch(/^hmac-sha256:v1:[a-f0-9]{64}$/u);
     expect(
       subject.includes(createHmac("sha256", keyRow.hmac_key).update(bearer).digest("hex")),
     ).toBe(false);
-    expect(hashGatewayResponseSessionBearer(bearer, stateOptions())).not.toBe(subject);
+    expect(
+      loadGatewayConfigRevisionProjector(stateOptions()).hashResponseSessionBearer(bearer),
+    ).not.toBe(subject);
 
     expect(reopened.prepare("PRAGMA user_version").get()?.user_version).toBe(schemaVersion);
     expect(keyRow.hmac_key).toHaveLength(32);
@@ -68,7 +67,9 @@ describe("Gateway config revision tokens", () => {
 
     closeOpenClawStateDatabaseForTest();
     expect(loadGatewayConfigRevisionProjector(options).projectRawHash(rawHash)).toBe(rawToken);
-    expect(hashGatewayResponseSessionBearer(bearer, options)).toBe(subject);
+    expect(loadGatewayConfigRevisionProjector(options).hashResponseSessionBearer(bearer)).toBe(
+      subject,
+    );
   });
 
   it("fails closed instead of replacing corrupt persisted key material", () => {
@@ -82,9 +83,6 @@ describe("Gateway config revision tokens", () => {
     database.exec("PRAGMA ignore_check_constraints = OFF;");
 
     expect(() => loadGatewayConfigRevisionProjector(options)).toThrow(
-      "config revision key is corrupt",
-    );
-    expect(() => hashGatewayResponseSessionBearer("synthetic-operator-password", options)).toThrow(
       "config revision key is corrupt",
     );
     expect(

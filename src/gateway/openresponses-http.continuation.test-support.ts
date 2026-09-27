@@ -3,6 +3,7 @@ import { expect, it, vi } from "vitest";
 import { createDeferred } from "../../test/helpers/promise.js";
 import { FailoverError } from "../agents/failover-error.js";
 import * as logger from "../logger.js";
+import { seedPluginStateEntriesForTests } from "../plugin-state/plugin-state-store.test-helpers.js";
 import {
   closeOpenClawStateDatabaseAsync,
   openOpenClawStateDatabase,
@@ -12,7 +13,6 @@ import { findSseEvent, parseSseEvents } from "./http-stream.test-support.js";
 import type { ResponseResource } from "./open-responses.schema.js";
 import { rememberResponseSession } from "./openresponses-session-store.js";
 import * as responseSessions from "./openresponses-session-store.js";
-import { RESPONSE_SESSION_RETENTION_MS } from "./openresponses-session-store.types.js";
 import { agentCommandMock } from "./test-helpers.js";
 
 export function registerOpenResponsesContinuationTests({
@@ -57,7 +57,6 @@ export function registerOpenResponsesContinuationTests({
 
       agentCommandMock.mockClear();
       for (const mismatch of [
-        { responseId: `expired-${stream}`, nowMs: Date.now() - RESPONSE_SESSION_RETENTION_MS },
         { responseId: `foreign-agent-${stream}`, agentId: "another-agent" },
         { responseId: `foreign-session-${stream}`, requestedSessionKey: "another-session" },
       ]) {
@@ -65,16 +64,31 @@ export function registerOpenResponsesContinuationTests({
           {
             authSubject: "gateway-auth:none",
             agentId: "main",
-            nowMs: Date.now(),
             sessionKey: "agent:main:openresponses:unreachable",
             ...mismatch,
           },
           () => {},
         );
       }
+      seedPluginStateEntriesForTests([
+        {
+          pluginId: "core:openresponses",
+          namespace: "response-sessions",
+          key: `expired-${stream}`,
+          value: {
+            sessionKey: "agent:main:openresponses:unreachable",
+            authSubject: "gateway-auth:none",
+            agentId: "main",
+          },
+          expiresAt: Date.now() - 1,
+        },
+      ]);
       for (const previousId of [
         "missing",
         "",
+        " ",
+        "x".repeat(513),
+        ` ${id}`,
         `expired-${stream}`,
         `foreign-agent-${stream}`,
         `foreign-session-${stream}`,
@@ -156,11 +170,13 @@ export function registerOpenResponsesContinuationTests({
     const json = (await res.json()) as { id?: string };
     expect(json.id).toMatch(/^resp_/);
     const stored = openOpenClawStateDatabase()
-      .db.prepare("SELECT auth_subject FROM openresponses_sessions WHERE response_id = ?")
+      .db.prepare(
+        "SELECT value_json FROM plugin_state_entries WHERE plugin_id = 'core:openresponses' AND namespace = 'response-sessions' AND entry_key = ?",
+      )
       .get(json.id!);
-    expect(stored?.auth_subject).toEqual(expect.any(String));
-    expect(stored?.auth_subject).not.toContain(bearer);
-    expect(stored?.auth_subject).not.toContain(createHash("sha256").update(bearer).digest("hex"));
+    expect(stored?.value_json).toEqual(expect.any(String));
+    expect(stored?.value_json).not.toContain(bearer);
+    expect(stored?.value_json).not.toContain(createHash("sha256").update(bearer).digest("hex"));
     await closeOpenClawStateDatabaseAsync();
     const foreign = await postResponses(
       port,

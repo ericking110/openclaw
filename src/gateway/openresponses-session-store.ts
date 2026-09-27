@@ -1,77 +1,62 @@
-import { createSqliteWorkerWriteAdmission } from "../infra/sqlite-worker-store.js";
-import { executeExistingOpenClawStateRead } from "../state/openclaw-state-db-readonly.js";
-import type { OpenClawStateDatabaseOptions } from "../state/openclaw-state-db.js";
-import { captureOpenClawStateWorkerContext } from "../state/openclaw-state-worker-context.js";
-import {
-  executeOpenClawStateWorker,
-  runOpenClawStateWorkerOperation,
-} from "../state/openclaw-state-worker-store.js";
+import { createCorePluginStateKeyedStore } from "../plugin-state/plugin-state-store.js";
+import { validateKey } from "../plugin-state/plugin-state-store.validation.js";
 import {
   isIncognitoResponseSession,
+  MAX_RESPONSE_SESSION_ENTRIES,
+  RESPONSE_SESSION_RETENTION_MS,
   type ResponseSessionLookup,
+  type ResponseSessionScope,
   type ResponseSessionWrite,
 } from "./openresponses-session-store.types.js";
 
-type Options = Pick<OpenClawStateDatabaseOptions, "path" | "env">;
-
-export async function hashResponseSessionBearer(
-  bearer: string,
-  options: Options = {},
-): Promise<string> {
-  return executeOpenClawStateWorker(captureOpenClawStateWorkerContext(options), {
-    type: "openResponses.hashBearer",
-    input: { bearer },
+function openStore(env?: NodeJS.ProcessEnv) {
+  return createCorePluginStateKeyedStore<ResponseSessionScope & { sessionKey: string }>({
+    ownerId: "core:openresponses",
+    namespace: "response-sessions",
+    defaultTtlMs: RESPONSE_SESSION_RETENTION_MS,
+    maxEntries: MAX_RESPONSE_SESSION_ENTRIES,
+    overflowPolicy: "evict-oldest",
+    env,
   });
 }
 
 export async function lookupResponseSession(
   input: ResponseSessionLookup,
-  options: Options = {},
+  env?: NodeJS.ProcessEnv,
 ): Promise<string | undefined> {
-  const result = await executeExistingOpenClawStateRead(options, {
-    type: "openResponses.lookup",
-    input,
-  });
-  if (result === undefined) {
+  try {
+    if (validateKey(input.responseId, "lookup") !== input.responseId) {
+      return undefined;
+    }
+  } catch {
     return undefined;
   }
-  if (result.ok && result.type === "openResponses.lookup") {
-    return result.sessionKey;
-  }
-  throw new Error("Unexpected OpenResponses session lookup result");
+  const stored = await openStore(env).lookup(input.responseId);
+  return stored?.authSubject === input.authSubject &&
+    stored.agentId === input.agentId &&
+    stored.requestedSessionKey === input.requestedSessionKey
+    ? stored.sessionKey
+    : undefined;
 }
 
 export async function rememberResponseSession(
   input: ResponseSessionWrite,
   assertCurrent: () => void,
-  options: Options = {},
+  env?: NodeJS.ProcessEnv,
 ): Promise<void> {
   if (isIncognitoResponseSession(input)) {
     return;
   }
-  const context = captureOpenClawStateWorkerContext(options);
-  const assertWriteCurrent = () => {
-    context.admission.assertCurrent();
-    assertCurrent();
-  };
-  const captured = { ...input };
-  await runOpenClawStateWorkerOperation(
-    context,
-    (scope) => scope.execute({ type: "openResponses.remember", input: captured }),
+  const { responseId, sessionKey, authSubject, agentId, requestedSessionKey } = input;
+  await openStore(env).register(
+    responseId,
     {
-      assertCurrent: assertWriteCurrent,
-      createAdmission: createSqliteWorkerWriteAdmission(assertWriteCurrent, [
-        context.admission.databasePath,
-      ]),
+      sessionKey,
+      authSubject,
+      agentId,
+      ...(requestedSessionKey === undefined ? {} : { requestedSessionKey }),
     },
+    { assertCurrent },
   );
   assertCurrent();
-}
-
-export async function pruneResponseSessions(nowMs: number, options: Options = {}): Promise<void> {
-  await runOpenClawStateWorkerOperation(
-    captureOpenClawStateWorkerContext(options),
-    (scope) => scope.execute({ type: "openResponses.prune", input: { nowMs } }),
-    { existingOnly: true },
-  );
 }

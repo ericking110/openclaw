@@ -8,8 +8,6 @@ import {
 import { listRegistryWorktreesInDatabase } from "../agents/worktrees/registry-read.kernel.js";
 import { readWorktreeRunLeaseStateInDatabase } from "../agents/worktrees/run-lease-owner.js";
 import { getFleetCellInDatabase, listFleetCellsInDatabase } from "../fleet/registry.kernel.js";
-import { lookupResponseSessionInDatabase } from "../gateway/openresponses-session-store.worker.js";
-import { readOnboardingRecommendationsInDatabase } from "./onboarding-recommendations.kernel.js";
 import type {
   OpenClawStateReadCommand,
   OpenClawStateReadResult,
@@ -24,8 +22,6 @@ export function readStateRegistryCommand(
         | "worktrees.cleanupState"
         | "fleet.list"
         | "fleet.get"
-        | "openResponses.lookup"
-        | "onboardingRecommendations.read"
         | "sandboxRegistry.list"
         | "sandboxRegistry.get"
         | "sandboxRegistry.runtimeIds"
@@ -33,18 +29,6 @@ export function readStateRegistryCommand(
     }
   >,
 ): OpenClawStateReadResult {
-  if (command.type === "openResponses.lookup") {
-    return {
-      type: command.type,
-      sessionKey: lookupResponseSessionInDatabase(db, command.input),
-    };
-  }
-  if (command.type === "onboardingRecommendations.read") {
-    return {
-      type: command.type,
-      record: readOnboardingRecommendationsInDatabase(db, command.configKey),
-    };
-  }
   if (command.type === "sandboxRegistry.list") {
     return { type: command.type, entries: readSandboxRegistryInDatabase(db) };
   }

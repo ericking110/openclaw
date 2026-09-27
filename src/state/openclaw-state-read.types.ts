@@ -27,7 +27,6 @@ import type {
   CronRunRecoveryObservation,
 } from "../cron/store/run-recovery-read.types.js";
 import type { FleetCellRecord } from "../fleet/registry.types.js";
-import type { ResponseSessionLookup } from "../gateway/openresponses-session-store.types.js";
 import type {
   ListTerminalOperatorApprovalsInput,
   ListTerminalOperatorApprovalsResult,
@@ -163,7 +162,6 @@ export type OpenClawStateReadCommand =
   | { type: "sessionGroups.snapshot" }
   | { type: "sessionGroups.members"; cfg: OpenClawConfig }
   | { type: "onboardingRecommendations.read"; configKey: string }
-  | { type: "openResponses.lookup"; input: ResponseSessionLookup }
   | { type: "userProfiles.reconcile"; profileId: string }
   | UserProfileAvatarReadCommand
   | { type: "userProfiles.channelIdentity.list"; profileId: string }
@@ -262,10 +260,6 @@ export type OpenClawStateReadResult =
   | {
       type: "operatorApprovals.history";
       history: ListTerminalOperatorApprovalsResult;
-    }
-  | {
-      type: "openResponses.lookup";
-      sessionKey: string | undefined;
     }
   | ReadResult<PluginBlobReadReply>
   | {

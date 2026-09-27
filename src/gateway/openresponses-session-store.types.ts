@@ -8,7 +8,6 @@ export type ResponseSessionScope = {
 
 export type ResponseSessionLookup = ResponseSessionScope & {
   responseId: string;
-  nowMs: number;
 };
 
 export type ResponseSessionWrite = ResponseSessionLookup & { sessionKey: string };
@@ -22,9 +21,3 @@ export function isIncognitoResponseSession(input: ResponseSessionWrite): boolean
 // Match the default session maintenance age and count; response metadata stays bounded too.
 export const RESPONSE_SESSION_RETENTION_MS = 30 * 24 * 60 * 60_000;
 export const MAX_RESPONSE_SESSION_ENTRIES = 5_000;
-
-export type ResponseSessionWorkerOperations = {
-  "openResponses.hashBearer": { input: { bearer: string }; output: string };
-  "openResponses.remember": { input: ResponseSessionWrite; output: void };
-  "openResponses.prune": { input: { nowMs: number }; output: void };
-};
