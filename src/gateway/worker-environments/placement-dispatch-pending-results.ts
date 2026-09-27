@@ -70,10 +70,7 @@ const log = createSubsystemLogger("gateway/worker-placement");
 
 export async function resolvePriorWorkspaceResultConflict(
   resolve: PreparedWorkerWorkspaceRecovery["resolveConflict"],
-  placement: {
-    sessionId: string;
-    sessionKey: string;
-    agentId: string;
+  placement: WorkerSessionPlacementIdentity & {
     workspaceResultConflict?: WorkerWorkspaceResultConflict;
   },
 ): Promise<WorkerWorkspaceResultConflict | undefined> {
@@ -349,6 +346,35 @@ export async function recoverPendingWorkspaceResults(
                 ? placements.completeWorkspaceResultAndReleaseTurn(turnClaim)
                 : completeRecoveredWorkspaceTeardown({ placements, placement: active, turnClaim });
             };
+            const settleRecoveredResult = async (
+              stagedResultRef: string | null | undefined,
+              conflictPaths: readonly string[],
+              completion: Pick<
+                Parameters<typeof settleStagedWorkspaceResult>[0],
+                "beforeComplete" | "complete" | "afterComplete"
+              >,
+            ) => {
+              const finalized = await finalizeWorkspaceResultConflicts({
+                assertCurrent: recovery.assertCurrent,
+                placements,
+                turnClaim,
+                conflictPaths,
+                priorConflict: priorWorkspaceResultConflict,
+                stagedResultRef,
+                workspace,
+                report: recovery.reportConflict,
+              });
+              await deps.publishAcceptedWorkspace?.(turnClaim);
+              await settleStagedWorkspaceResult({
+                assertCurrent: recovery.assertCurrent,
+                placements,
+                turnClaim,
+                workspace,
+                stagedResultRef,
+                conflictRetained: finalized.conflictRetained,
+                ...completion,
+              });
+            };
             if (preserveEnvironment && !sameGatewayInstance) {
               // Restart revokes the previous turn, not its machine. Confirm the old
               // node runtime stopped before accepting a result or reconnecting it.
@@ -487,24 +513,7 @@ export async function recoverPendingWorkspaceResults(
                   });
                   ownedStagedResultRef = canonicalStagedResultRef;
                 }
-                const finalized = await finalizeWorkspaceResultConflicts({
-                  assertCurrent: recovery.assertCurrent,
-                  placements,
-                  turnClaim,
-                  conflictPaths,
-                  priorConflict: priorWorkspaceResultConflict,
-                  stagedResultRef: ownedStagedResultRef,
-                  workspace,
-                  report: recovery.reportConflict,
-                });
-                await deps.publishAcceptedWorkspace?.(turnClaim);
-                await settleStagedWorkspaceResult({
-                  assertCurrent: recovery.assertCurrent,
-                  placements,
-                  turnClaim,
-                  workspace,
-                  stagedResultRef: ownedStagedResultRef,
-                  conflictRetained: finalized.conflictRetained,
+                await settleRecoveredResult(ownedStagedResultRef, conflictPaths, {
                   beforeComplete: async () => {
                     if (!preserveEnvironment) {
                       await prepareGatewayMove(active, turnClaim, recovery.assertCurrent);
@@ -606,24 +615,7 @@ export async function recoverPendingWorkspaceResults(
                     "Recovered cloud workspace conflict has no staged result reference",
                   );
                 }
-                const finalized = await finalizeWorkspaceResultConflicts({
-                  assertCurrent: recovery.assertCurrent,
-                  placements,
-                  turnClaim,
-                  conflictPaths,
-                  priorConflict: priorWorkspaceResultConflict,
-                  stagedResultRef: recordedStagedResultRef,
-                  workspace,
-                  report: recovery.reportConflict,
-                });
-                await deps.publishAcceptedWorkspace?.(turnClaim);
-                await settleStagedWorkspaceResult({
-                  assertCurrent: recovery.assertCurrent,
-                  placements,
-                  turnClaim,
-                  workspace,
-                  stagedResultRef: recordedStagedResultRef,
-                  conflictRetained: finalized.conflictRetained,
+                await settleRecoveredResult(recordedStagedResultRef, conflictPaths, {
                   beforeComplete: async () => {
                     if (!preserveEnvironment) {
                       await prepareGatewayMove(active, turnClaim, recovery.assertCurrent);
