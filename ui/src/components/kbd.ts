@@ -1,8 +1,4 @@
-import { html, nothing, unsafeCSS, type TemplateResult } from "lit";
-import "../styles/kbd.css";
-import kbdCss from "../styles/kbd.css?inline";
-
-export const kbdStyles = unsafeCSS(kbdCss);
+import { html, nothing, type TemplateResult } from "lit";
 import { ref, type RefOrCallback } from "lit/directives/ref.js";
 import {
   formatKeyboardShortcutParts,
@@ -34,10 +30,10 @@ function renderKey(key: string) {
           style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap"
           >${key}</span
         ><span aria-hidden="true" style="position:absolute;inset:0;display:flex;align-items:center"
-          >${strokeIcon(keyboardIconShapes[symbol], "width:1em;height:1em;stroke-width:2.75")}</span
+          >${strokeIcon(keyboardIconShapes[symbol], "width:1em;height:1em;stroke-width:2.3")}</span
         ></span
       >`
-    : key;
+    : html`<span class="kbd__text">${key}</span>`;
 }
 
 /** Render literal key labels; chords use renderKeyboardShortcut, never parsed display strings. */

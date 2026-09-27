@@ -11,7 +11,8 @@ import {
 import { readSessionMethodAccess } from "../lib/session-method-access.ts";
 import { OpenClawLitElement } from "../lit/openclaw-element.ts";
 import { icons } from "./icons.ts";
-import { kbdStyles, renderKeyboardShortcut } from "./kbd.ts";
+import { kbdStyles } from "./kbd-styles.ts";
+import { renderKeyboardShortcut } from "./kbd.ts";
 import "./modal-dialog.ts";
 
 class KeyboardShortcutsDialog extends OpenClawLitElement {

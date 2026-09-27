@@ -5,7 +5,7 @@ import type WaTooltip from "@awesome.me/webawesome/dist/components/tooltip/toolt
 import { css, html, type TemplateResult } from "lit";
 import { property, query } from "lit/decorators.js";
 import { OpenClawLitElement } from "../lit/openclaw-element.ts";
-import { kbdStyles } from "./kbd.ts";
+import { kbdStyles } from "./kbd-styles.ts";
 import {
   isTooltipTextRedundant,
   isTooltipTriggerElement,

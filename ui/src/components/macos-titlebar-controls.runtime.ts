@@ -57,8 +57,8 @@ class MacosTitlebarControls extends OpenClawLightDomContentsElement {
                   label: t("chat.openCommandPalette"),
                   tooltip: t("chat.commandPaletteTitle"),
                   tooltipTemplate: renderShortcutText(
-                    t("chat.commandPaletteTitle").replace("⌘", "{shortcut}"),
-                    renderKbd("⌘", { inline: true }),
+                    t("chat.commandPaletteTitle").replace("⌘K", "{shortcut}"),
+                    renderKbd(["⌘", "K"], { inline: true }),
                   ),
                   icon: icons.search,
                   onClick: this.onOpenPalette,

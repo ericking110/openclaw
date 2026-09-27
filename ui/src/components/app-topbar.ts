@@ -54,7 +54,7 @@ class AppTopbar extends OpenClawLightDomContentsElement {
           <div class="topnav-shell__actions">
             <openclaw-tooltip
               .content=${t("chat.commandPaletteTitle")}
-              .contentTemplate=${renderShortcutText(t("chat.commandPaletteTitle").replace("⌘", "{shortcut}"), renderKbd("⌘", { inline: true }))}
+              .contentTemplate=${renderShortcutText(t("chat.commandPaletteTitle").replace("⌘K", "{shortcut}"), renderKbd(["⌘", "K"], { inline: true }))}
             >
               <button
                 class="topbar-search"

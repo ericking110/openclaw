@@ -3,7 +3,7 @@ import { live } from "lit/directives/live.js";
 import { ref } from "lit/directives/ref.js";
 import type { ChatFollowUpMode } from "../../../app/settings.ts";
 import { icons } from "../../../components/icons.ts";
-import { renderKbd, renderShortcutText } from "../../../components/kbd.ts";
+import { renderKbd } from "../../../components/kbd.ts";
 import { syncDropdownItemRadio } from "../../../components/web-awesome.ts";
 import { t } from "../../../i18n/index.ts";
 import { canSubmitBeforeChatHistory } from "../../../lib/chat/commands.ts";
@@ -518,9 +518,9 @@ export function renderChatPrimaryActions(props: ChatRunControlsProps) {
     ? `${activeRunActionLabel} ⏎ · ${alternateActionLabel} ${t("chat.sendShortcutModifierEnter")}`
     : activeRunActionLabel;
   const activeRunActionTooltipTemplate = alternateShortcutAvailable
-    ? html`${activeRunActionLabel}${" "}${renderKbd("⏎", { inline: true })}${" · "}${alternateActionLabel}${" "}${renderShortcutText(
-        t("chat.sendShortcutModifierEnter").replace("⌘", "{shortcut}"),
-        renderKbd("⌘", { inline: true }),
+    ? html`${activeRunActionLabel}${" "}${renderKbd("⏎", { inline: true })}${" · "}${alternateActionLabel}${" "}${renderKbd(
+        t("chat.sendShortcutModifierEnter").split(/(⌘)/u).filter(Boolean),
+        { inline: true },
       )}`
     : undefined;
   // Preserve the click identity without mistaking it for a follow-up mode.
