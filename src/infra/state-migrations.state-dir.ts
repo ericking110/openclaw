@@ -7,6 +7,7 @@ import { normalizeLowercaseStringOrEmpty } from "@openclaw/normalization-core/st
 import { resolveProfileStateDir } from "../cli/profile-utils.js";
 import { resolveLegacyStateDirs, resolveNewStateDir, resolveStateDir } from "../config/paths.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import { withArtifactPreservingStateReads } from "../state/openclaw-state-db-readonly.js";
 import { resolveIdentityPathViaExistingAncestorSync } from "./boundary-path.js";
 import { resolveUserPath } from "./home-dir.js";
 import {
@@ -280,16 +281,57 @@ export function resolvePendingLegacyStateDirMigrationPaths(params: {
   return { source, target };
 }
 
-export async function autoMigrateLegacyStateDir(params: {
+type StateDirMigrationParams = {
   env?: NodeJS.ProcessEnv;
   homedir?: () => string;
   log?: MigrationLogger;
-}): Promise<StateDirMigrationResult> {
+};
+
+/** Reserve the once-only migration while its caller transfers maintenance custody. */
+export function prepareLegacyStateDirMigration(params: StateDirMigrationParams) {
   if (autoMigrateStateDirChecked) {
-    return { migrated: false, skipped: true, changes: [], warnings: [] };
+    return undefined;
   }
   autoMigrateStateDirChecked = true;
+  let pluginStateDir: string | undefined;
+  const result = migrateLegacyStateDirRoot(params, (stateDir) => {
+    pluginStateDir = stateDir;
+  });
+  let completion: Promise<StateDirMigrationResult> | undefined;
+  const complete = async () => {
+    if (pluginStateDir) {
+      const imported = await migrateLegacyInstalledPluginIndex({ stateDir: pluginStateDir });
+      result.changes.push(...imported.changes);
+      result.warnings.push(...imported.warnings);
+      if (imported.notices?.length) {
+        result.notices = [...(result.notices ?? []), ...imported.notices];
+      }
+      result.migrated = result.changes.length > 0;
+      if ((params.env ?? process.env).OPENCLAW_STATE_DIR?.trim()) {
+        result.skipped = !result.migrated && !result.warnings.length && !result.notices?.length;
+      }
+    }
+    return result;
+  };
+  return {
+    stateDir: resolveStateDir(params.env ?? process.env, params.homedir ?? os.homedir),
+    complete: () => (completion ??= complete()),
+  };
+}
 
+export async function autoMigrateLegacyStateDir(
+  params: StateDirMigrationParams,
+): Promise<StateDirMigrationResult> {
+  const prepared = prepareLegacyStateDirMigration(params);
+  return prepared
+    ? prepared.complete()
+    : { migrated: false, skipped: true, changes: [], warnings: [] };
+}
+
+function migrateLegacyStateDirRoot(
+  params: StateDirMigrationParams,
+  selectPluginImport: (stateDir: string) => void,
+): StateDirMigrationResult {
   const homedir = params.homedir ?? os.homedir;
   const env = params.env ?? process.env;
   const warnings: string[] = [];
@@ -297,14 +339,9 @@ export async function autoMigrateLegacyStateDir(params: {
   const notices: string[] = [];
   const hasCustomStateDir = Boolean(env.OPENCLAW_STATE_DIR?.trim());
   const targetDir = hasCustomStateDir ? resolveStateDir(env, homedir) : resolveNewStateDir(homedir);
-  const migratePluginInstallIndex = async () => {
-    const result = await migrateLegacyInstalledPluginIndex({ stateDir: targetDir });
-    changes.push(...result.changes);
-    warnings.push(...result.warnings);
-    notices.push(...(result.notices ?? []));
-  };
+
   if (hasCustomStateDir) {
-    await migratePluginInstallIndex();
+    selectPluginImport(targetDir);
     return {
       migrated: changes.length > 0,
       skipped: changes.length === 0 && warnings.length === 0 && notices.length === 0,
@@ -330,7 +367,7 @@ export async function autoMigrateLegacyStateDir(params: {
     legacyStat = null;
   }
   if (!legacyStat) {
-    await migratePluginInstallIndex();
+    selectPluginImport(targetDir);
     return {
       migrated: changes.length > 0,
       skipped: false,
@@ -354,7 +391,7 @@ export async function autoMigrateLegacyStateDir(params: {
       return { migrated: false, skipped: false, changes, warnings };
     }
     if (path.resolve(legacyTarget) === path.resolve(targetDir)) {
-      await migratePluginInstallIndex();
+      selectPluginImport(targetDir);
       return {
         migrated: changes.length > 0,
         skipped: false,
@@ -393,7 +430,7 @@ export async function autoMigrateLegacyStateDir(params: {
 
   if (safeStatSync(targetDir)?.isDirectory()) {
     if (legacyDir && isLegacyDirSymlinkMirror(legacyDir, targetDir)) {
-      await migratePluginInstallIndex();
+      selectPluginImport(targetDir);
       return {
         migrated: changes.length > 0,
         skipped: false,
@@ -416,7 +453,7 @@ export async function autoMigrateLegacyStateDir(params: {
         `State dir migration skipped: target already exists (${targetDir}). Remove or merge manually.`,
       );
     }
-    await migratePluginInstallIndex();
+    selectPluginImport(targetDir);
     return {
       migrated: changes.length > 0,
       skipped: false,
@@ -427,9 +464,9 @@ export async function autoMigrateLegacyStateDir(params: {
   }
 
   if (legacyDir) {
-    const pluginInstallWarning = preflightLegacyInstalledPluginIndexMigration({
-      stateDir: legacyDir,
-    });
+    const pluginInstallWarning = withArtifactPreservingStateReads(() =>
+      preflightLegacyInstalledPluginIndexMigration({ stateDir: legacyDir }),
+    );
     if (pluginInstallWarning) {
       warnings.push(pluginInstallWarning);
       return { migrated: false, skipped: false, changes, warnings };
@@ -487,7 +524,7 @@ export async function autoMigrateLegacyStateDir(params: {
     }
   }
 
-  await migratePluginInstallIndex();
+  selectPluginImport(targetDir);
   return {
     migrated: changes.length > 0,
     skipped: false,

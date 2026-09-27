@@ -92,6 +92,8 @@ export type GatewayLockOptions = {
   sleep?: (ms: number) => Promise<void>;
   lockDir?: string;
   role?: GatewayLockRole;
+  /** Transfer a relocated Doctor root only after the target exclusion is held. */
+  relocatedMaintenanceOwner?: GatewayLockHandle;
   listenerMode?: "foreground" | "supervised";
   supervisor?: GatewayOwnerSupervisor | null;
   /** Override process command-line reader (testing seam). */
@@ -419,6 +421,17 @@ export async function acquireGatewayLock(
   const role = opts.role ?? "gateway";
   const paths = resolveGatewayLockPaths(env, opts.lockDir);
   const databasePath = path.join(paths.stateDir, "state", "openclaw.sqlite");
+  const previousOwner = opts.relocatedMaintenanceOwner;
+  if (previousOwner) {
+    previousOwner.assertCurrent();
+    if (
+      role !== "sqlite-maintenance" ||
+      resolveIdentityPathViaExistingAncestorSync(previousOwner.stateDir) !== paths.stateDir ||
+      previousOwner.lockPath === paths.ownerLockPath
+    ) {
+      throw new GatewayLockError("Maintenance ownership transfer requires its relocated root");
+    }
+  }
   const now = opts.now ?? performance.now.bind(performance);
   const startedAt = now();
   const timeoutMs = resolveTimerTimeoutMs(
@@ -476,6 +489,10 @@ export async function acquireGatewayLock(
             projectionPath: paths.stateLockPath,
           });
           try {
+            if (previousOwner) {
+              previousOwner.assertCurrent();
+              await previousOwner.release();
+            }
             await assertHistoricalGatewayOwnerStopped(paths, opts);
             owner.assertCurrent();
             return owner;
