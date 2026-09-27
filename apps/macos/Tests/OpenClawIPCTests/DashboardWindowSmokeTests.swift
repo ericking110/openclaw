@@ -701,6 +701,37 @@ extension DashboardWindowSmokeTests {
         #expect(chromeScript.isForMainFrameOnly)
     }
 
+    @Test func `dashboard refresh preserves titlebar chrome for the current endpoint and mount`() async throws {
+        let server = try await DashboardHTTPFixture.start()
+        defer { server.stop() }
+        let replacementServer = try await DashboardHTTPFixture.start()
+        defer { replacementServer.stop() }
+        let auth = DashboardWindowAuth(gatewayUrl: nil, token: nil, password: nil)
+        let controller = DashboardWindowController(
+            url: server.url("/control/"),
+            auth: auth,
+            websiteDataStore: .nonPersistent(),
+            windowAutosaveName: "",
+            requestBrowserProfileImportOffer: { _ in false })
+        defer { controller.closeDashboard() }
+
+        for endpoint in [server, replacementServer] {
+            controller.update(url: endpoint.url("/replacement-control/"), auth: auth)
+
+            let titlebarScripts = controller._testUserScripts.filter {
+                $0.source.contains("--openclaw-native-titlebar-height: 52px")
+            }
+            #expect(titlebarScripts.count == 1)
+            let script = try #require(titlebarScripts.first)
+            let source = script.source.replacingOccurrences(of: "\\/", with: "/")
+            #expect(source.contains("\"http://127.0.0.1:\(endpoint.port)\""))
+            #expect(source.contains("\"/replacement-control/\""))
+            #expect(!source.contains("\"/control/\""))
+            #expect(script.injectionTime == .atDocumentStart)
+            #expect(script.isForMainFrameOnly)
+        }
+    }
+
     @Test func `dashboard advertises web titlebar chrome before document load`() async throws {
         let server = try await DashboardHTTPFixture.start()
         defer { server.stop() }

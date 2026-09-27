@@ -379,11 +379,6 @@ final class NativeConversationController {
         return true
     }
 
-    private var nativeInputIsBusy: Bool {
-        self.owner.mode == .native && (self.viewModel.hasDraftToSend || self.viewModel.isAttachmentOwnerPinned ||
-            self.viewModel.isSending || self.viewModel.isSubmittingDraft)
-    }
-
     private func reserveCurrentSession() async -> Bool {
         guard let context = self.viewModel.webConversationContext else { return false }
         return await self.reserveSession(context) { self.viewModel.webConversationContext == context }
@@ -398,7 +393,7 @@ final class NativeConversationController {
             sessionKey: context.sessionKey,
             agentID: context.agentId)
         guard !self.isClosed, !self.didFallBack, self.ownershipID == owner,
-              isCurrent(), !self.nativeInputIsBusy else { return false }
+              isCurrent(), !self.viewModel.hasPendingNativeConversationInput else { return false }
         if self.ownedScopes.contains(scope) { return true }
         let ownership = self.connection.chatSendOwnership
         // Each awaiting attempt owns its own claim. A stale completion must not
@@ -417,7 +412,7 @@ final class NativeConversationController {
         guard accepted else { return false }
         defer { ownership.endWeb(scope, owner: reservation) }
         guard !self.isClosed, !self.didFallBack, self.ownershipID == owner,
-              isCurrent(), !self.nativeInputIsBusy else { return false }
+              isCurrent(), !self.viewModel.hasPendingNativeConversationInput else { return false }
         // The temporary claim keeps native admission closed across this transfer.
         guard ownership.beginWeb(scope, owner: owner) else { return false }
         self.ownedScopes.insert(scope)

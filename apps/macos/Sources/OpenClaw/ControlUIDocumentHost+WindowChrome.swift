@@ -15,11 +15,16 @@ extension ControlUIDocumentHost {
     private static let windowDragMessageHandlerName = "openclawWindowDrag"
     static let nativeTitlebarCSS = ":root { --openclaw-native-titlebar-height: 52px; }"
 
-    func installWindowChrome() {
+    func registerWindowChromeHandler() {
         let controller = self.webView.configuration.userContentController
         let handler = ControlUIWindowDragMessageHandler()
         handler.owner = self
         controller.add(handler, name: Self.windowDragMessageHandlerName)
+    }
+
+    /// Script refreshes replace URL-scoped chrome, while WebKit retains the handler.
+    func installWindowChromeScript() {
+        let controller = self.webView.configuration.userContentController
         // Start before the web header measures its band; document.head may not
         // exist yet, so attach to the root as soon as the parser creates it.
         let script = """

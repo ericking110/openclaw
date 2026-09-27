@@ -625,6 +625,7 @@ final class DashboardWindowController: NSWindowController, WKNavigationDelegate,
     func refreshNativeScripts() {
         let controller = self.webView.configuration.userContentController
         controller.removeAllUserScripts()
+        self.documentHost.installWindowChromeScript()
         Self.installNativeChromeScript(into: controller, url: self.currentURL)
         Self.installNativeAppLinkScript(into: controller, url: self.currentURL)
         Self.installNativeGatewaysScript(into: controller, url: self.currentURL, snapshot: self.gatewaySnapshot)

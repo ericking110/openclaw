@@ -54,7 +54,8 @@ final class ControlUIDocumentHost {
             forKey: "drawsBackground")
         self.webView.underPageBackgroundColor = .windowBackgroundColor
         self.webView.allowsBackForwardNavigationGestures = true
-        self.installWindowChrome()
+        self.registerWindowChromeHandler()
+        self.installWindowChromeScript()
     }
 
     var browserSession: GatewayBrowserSession? {

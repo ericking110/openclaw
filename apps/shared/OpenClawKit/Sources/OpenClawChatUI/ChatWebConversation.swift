@@ -93,16 +93,20 @@ extension OpenClawChatViewModel {
         return NativeConversationContext(agentId: agent, sessionKey: self.sessionKey)
     }
 
+    public var hasPendingNativeConversationInput: Bool {
+        // Session selection restores the destination draft before the renderer changes.
+        self.hasDraftToSend || self.isAttachmentOwnerPinned || self.isSending || self.isSubmittingDraft
+    }
+
     public func hasPendingNativeConversationWork() async -> Bool {
-        if self.webConversation?.mode == .native,
-           self.hasDraftToSend || self.blocksAttachmentOwnerChange { return true }
-        guard let outbox else { return self.isSending || self.isSubmittingDraft }
+        if self.hasPendingNativeConversationInput { return true }
+        guard let outbox else { return false }
         let session = self.currentSessionSnapshot()
         guard let commands = await outbox.loadCommandsIfAvailable() else { return true }
         guard self.isCurrentSession(session) else { return true }
         let scope = OpenClawChatSendOwnership.Scope(
             sessionKey: session.key, agentID: session.deliveryAgentID, routingContract: session.sessionRoutingContract)
-        return self.isSending || self.isSubmittingDraft || commands.contains {
+        return self.hasPendingNativeConversationInput || commands.contains {
             OpenClawChatSendOwnership.Scope(
                 sessionKey: $0.deliverySessionKey, agentID: $0.agentID, routingContract: $0.routingContract) == scope
         }
