@@ -3,15 +3,15 @@ import { property, state } from "lit/decorators.js";
 import { openShellNewSession, type ShellNewSessionHost } from "../app/app-shell-new-session.ts";
 import type { ChatSendShortcut } from "../app/settings.ts";
 import { t } from "../i18n/index.ts";
+import { resolveKeyboardShortcutSections } from "../lib/keyboard-shortcut-catalog.ts";
 import {
-  formatKeyboardShortcutParts,
   KEYBOARD_SHORTCUT_COMBOS,
   matchesShortcutCombo,
-  resolveKeyboardShortcutSections,
-} from "../lib/keyboard-shortcut-catalog.ts";
+} from "../lib/keyboard-shortcut-contract.ts";
 import { readSessionMethodAccess } from "../lib/session-method-access.ts";
 import { OpenClawLitElement } from "../lit/openclaw-element.ts";
 import { icons } from "./icons.ts";
+import { renderKeyboardShortcut } from "./kbd.ts";
 import "./modal-dialog.ts";
 
 class KeyboardShortcutsDialog extends OpenClawLitElement {
@@ -215,9 +215,7 @@ class KeyboardShortcutsDialog extends OpenClawLitElement {
                           ${entry.combos.map(
                             (combo) => html`
                               <span class="combo">
-                                ${formatKeyboardShortcutParts(combo).map(
-                                  (part) => html`<kbd>${part}</kbd>`,
-                                )}
+                                ${renderKeyboardShortcut(combo, { separateKeys: true })}
                               </span>
                             `,
                           )}

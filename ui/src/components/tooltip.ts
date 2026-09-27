@@ -2,7 +2,7 @@
 // wrapper API and manual dismissal; Web Awesome owns positioning and rendering.
 import "@awesome.me/webawesome/dist/components/tooltip/tooltip.js";
 import type WaTooltip from "@awesome.me/webawesome/dist/components/tooltip/tooltip.js";
-import { css, html } from "lit";
+import { css, html, type TemplateResult } from "lit";
 import { property, query } from "lit/decorators.js";
 import { OpenClawLitElement } from "../lit/openclaw-element.ts";
 import {
@@ -132,6 +132,9 @@ class Tooltip extends OpenClawLitElement {
   }
 
   @property() content = "";
+
+  /** Noninteractive presentation; content remains the accessible description. */
+  @property({ attribute: false }) contentTemplate?: TemplateResult;
 
   @property() placement: WaTooltip["placement"] = "top";
 
@@ -722,7 +725,7 @@ class Tooltip extends OpenClawLitElement {
         trigger="manual"
         @wa-hide=${() => this.#close()}
       >
-        <span class="tooltip-content">${this.content}</span>
+        <span class="tooltip-content">${this.contentTemplate ?? this.content}</span>
         <span
           class="tooltip-rich-content"
           @pointerenter=${this.#handleContentPointerEnter}

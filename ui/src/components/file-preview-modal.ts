@@ -9,6 +9,7 @@ import { renderCopyButton } from "./copy-button.ts";
 import { type FileKind, fileKindForPath } from "./file-kind.ts";
 import { filePreviewModalStyles } from "./file-preview-modal.styles.ts";
 import { icons } from "./icons.ts";
+import { renderKbd } from "./kbd.ts";
 import { toSanitizedMarkdownHtml } from "./markdown.ts";
 import { renderPanelLoadingSkeleton } from "./panel-loading-skeleton.ts";
 import "./modal-dialog.ts";
@@ -163,11 +164,12 @@ export class OpenClawFilePreviewModal extends OpenClawLitElement {
             this.layout === "files"
               ? html`<footer class="foot">
                   <span class="foot-group"
-                    ><span class="kbd">↑↓</span> ${t("filePreview.navigate")}</span
+                    >${renderKbd(["↑", "↓"], { className: "kbd" })}
+                    ${t("filePreview.navigate")}</span
                   >
                   <span class="spacer"></span>
                   <button class="button" @click=${this.emitClose}>
-                    ${t("common.close")} <span class="kbd">esc</span>
+                    ${t("common.close")} ${renderKbd("esc", { className: "kbd" })}
                   </button>
                 </footer>`
               : ""
