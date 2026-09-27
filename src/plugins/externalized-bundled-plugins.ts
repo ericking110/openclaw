@@ -29,20 +29,16 @@ function normalizePluginId(value: string | undefined): string {
   return value?.trim() ?? "";
 }
 
-function normalizeOptionalSpec(value: string | undefined): string {
-  return value?.trim() ?? "";
-}
-
 export function getExternalizedBundledPluginNpmSpec(
   bridge: ExternalizedBundledPluginBridge,
 ): string {
-  return normalizeOptionalSpec(bridge.npmSpec);
+  return bridge.npmSpec?.trim() ?? "";
 }
 
 export function getExternalizedBundledPluginClawHubSpec(
   bridge: ExternalizedBundledPluginBridge,
 ): string {
-  return normalizeOptionalSpec(bridge.clawhubSpec);
+  return bridge.clawhubSpec?.trim() ?? "";
 }
 
 export function getExternalizedBundledPluginTargetId(

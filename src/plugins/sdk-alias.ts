@@ -1192,16 +1192,12 @@ function resolvePluginRuntimeModuleCandidates(
       );
     }
     const dedupedCandidates = dedupeResolvedPaths(candidates);
-    for (const candidate of dedupedCandidates) {
-      if (pluginCacheExistsSync(candidate)) {
-        return {
-          modulePath,
-          packageRoot,
-          candidates: dedupedCandidates,
-          resolvedPath: candidate,
-        };
-      }
-    }
+    return {
+      modulePath,
+      packageRoot,
+      candidates: dedupedCandidates,
+      resolvedPath: dedupedCandidates.find(pluginCacheExistsSync) ?? null,
+    };
   } catch (error) {
     return {
       modulePath,
@@ -1211,12 +1207,6 @@ function resolvePluginRuntimeModuleCandidates(
       error: formatErrorMessage(error),
     };
   }
-  return {
-    modulePath,
-    packageRoot,
-    candidates: dedupeResolvedPaths(candidates),
-    resolvedPath: null,
-  };
 }
 
 export function buildPluginLoaderJitiOptions(

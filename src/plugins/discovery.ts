@@ -446,9 +446,7 @@ function derivePackagePluginIdHint(packageName: unknown): string | undefined {
   }
   // Scoped package names must normalize to their unscoped runtime owner so
   // diagnostics, config keys, and discovered plugin identities cannot diverge.
-  const unscoped = rawPackageName.includes("/")
-    ? (rawPackageName.split("/").pop() ?? rawPackageName)
-    : rawPackageName;
+  const unscoped = rawPackageName.slice(rawPackageName.lastIndexOf("/") + 1);
   for (const suffix of ["-provider", "-plugin"]) {
     if (unscoped.endsWith(suffix) && unscoped.length > suffix.length) {
       return unscoped.slice(0, -suffix.length);
@@ -764,10 +762,10 @@ function createPluginScanner(env: NodeJS.ProcessEnv, ownershipUid?: number | nul
     installOwner?: string;
     installOwnerAmbiguous?: true;
     manifest?: PackageManifest | null;
-  }): "added" | "invalid" | "none" {
+  }): boolean {
     const bundleFormat = detectBundleManifestFormat(params.rootDir);
     if (!bundleFormat) {
-      return "none";
+      return false;
     }
     const rootRealPath = pluginCacheRealpathSync(params.rootDir) ?? undefined;
     const rejectHardlinks = shouldRejectHardlinkedPluginFiles({
@@ -787,7 +785,7 @@ function createPluginScanner(env: NodeJS.ProcessEnv, ownershipUid?: number | nul
         message: bundleManifest.error,
         source: bundleManifest.manifestPath,
       });
-      return "invalid";
+      return false;
     }
     addCandidate({
       idHint: bundleManifest.manifest.id,
@@ -804,7 +802,7 @@ function createPluginScanner(env: NodeJS.ProcessEnv, ownershipUid?: number | nul
       bundledManifestId: bundleManifest.manifest.id,
       bundledManifestPath: bundleManifest.manifestPath,
     });
-    return "added";
+    return true;
   }
 
   function discoverPluginDirectory(params: PluginDirectoryDiscoveryParams): boolean {
@@ -923,7 +921,7 @@ function createPluginScanner(env: NodeJS.ProcessEnv, ownershipUid?: number | nul
         ...(params.installOwner ? { installOwner: params.installOwner } : {}),
         ...(params.installOwnerAmbiguous ? { installOwnerAmbiguous: true } : {}),
         manifest,
-      }) === "added"
+      })
     ) {
       return true;
     }
