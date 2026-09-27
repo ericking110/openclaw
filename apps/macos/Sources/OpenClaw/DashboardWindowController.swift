@@ -76,6 +76,11 @@ final class DashboardWindowController: NSWindowController, WKNavigationDelegate,
     let deviceSettingsMessageHandler: DashboardDeviceSettingsMessageHandler
     private(set) var currentURL: URL
     var auth: DashboardWindowAuth
+    var nativeGatewayAuthProvider: DashboardNativeGatewayAuth.Provider? {
+        didSet { self.nativeGatewayAuthRevision &+= 1 }
+    }
+
+    private(set) var nativeGatewayAuthRevision: UInt64 = 0
     var gatewaySnapshot: DashboardGatewaySnapshot?
     var notificationPermission = "notDetermined"
     var notificationTestOutcome: TestNotificationOutcome?
@@ -181,6 +186,9 @@ final class DashboardWindowController: NSWindowController, WKNavigationDelegate,
         let browserMessageHandler = DashboardBrowserMessageHandler()
         config.userContentController.addScriptMessageHandler(
             browserMessageHandler, contentWorld: .page, name: DashboardBrowserMessageHandler.name)
+        let nativeGatewayAuthHandler = DashboardNativeGatewayAuthMessageHandler()
+        config.userContentController.addScriptMessageHandler(
+            nativeGatewayAuthHandler, contentWorld: .page, name: DashboardNativeGatewayAuthMessageHandler.name)
         if shouldEnableUpdateBridge {
             // Handler presence is the Control UI feature probe; unsigned builds
             // and remote dashboards must not advertise a local app update.
@@ -233,6 +241,7 @@ final class DashboardWindowController: NSWindowController, WKNavigationDelegate,
         appLinkMessageHandler.owner = self
         deviceSettingsMessageHandler.owner = self
         browserMessageHandler.owner = self
+        nativeGatewayAuthHandler.owner = self
         deviceSettingsMessageHandler.startObserving()
         self.webView.navigationDelegate = self
         self.webView.uiDelegate = self

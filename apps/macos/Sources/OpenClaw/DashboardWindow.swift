@@ -61,6 +61,9 @@ struct DashboardLinkRequest: Equatable {
 
 enum DashboardWindowAuth: Equatable {
     case sharedCredentials(gatewayUrl: String?, token: String?, password: String?)
+    // Credentials remain native-only lifecycle metadata: rotation replaces the
+    // privileged document, but the script exposes only challenge-based authority.
+    case nativeDevice(gatewayUrl: String, token: String?, password: String?)
     case browserIdentity(gatewayUrl: String)
 
     init(gatewayUrl: String?, token: String?, password: String?) {
@@ -71,21 +74,31 @@ enum DashboardWindowAuth: Equatable {
         switch self {
         case let .sharedCredentials(gatewayUrl, _, _): gatewayUrl
         case let .browserIdentity(gatewayUrl): gatewayUrl
+        case let .nativeDevice(gatewayUrl, _, _): gatewayUrl
         }
     }
 
     var token: String? {
-        guard case let .sharedCredentials(_, token, _) = self else { return nil }
-        return token
+        switch self {
+        case let .sharedCredentials(_, token, _), let .nativeDevice(_, token, _): token
+        case .browserIdentity: nil
+        }
     }
 
     var password: String? {
-        guard case let .sharedCredentials(_, _, password) = self else { return nil }
-        return password
+        switch self {
+        case let .sharedCredentials(_, _, password), let .nativeDevice(_, _, password): password
+        case .browserIdentity: nil
+        }
     }
 
     var usesBrowserIdentity: Bool {
         if case .browserIdentity = self { return true }
+        return false
+    }
+
+    var usesNativeDevice: Bool {
+        if case .nativeDevice = self { return true }
         return false
     }
 

@@ -33,7 +33,7 @@ final class DashboardManager {
     @ObservationIgnored private var profileCredentialsNeedRefresh = false
     @ObservationIgnored private var profileObservations: [DashboardGatewayTarget: ProfileObservation] = [:]
     @ObservationIgnored private let authTokenProvider: @Sendable (GatewayConnection.Config) async -> String?
-    @ObservationIgnored private let connectionProvider: @Sendable (DashboardGatewayTarget) async -> GatewayConnection
+    @ObservationIgnored let connectionProvider: @Sendable (DashboardGatewayTarget) async -> GatewayConnection
     @ObservationIgnored let browserIdentityURLProvider:
         @Sendable (DashboardGatewayTarget, GatewayConnection.Config) async throws -> URL?
     @ObservationIgnored private let routeProbe: @Sendable (DashboardRouteProbePurpose) async -> Void
@@ -342,6 +342,7 @@ final class DashboardManager {
                     self.displayedPrimaryRoutes[ObjectIdentifier(replacement)] = (routeRevision, nil)
                 }
             } else {
+                controller.nativeGatewayAuthProvider = configuration.nativeAuthProvider
                 let updateBridgeEnabled = controller === self.controller && Self.updateBridgeEnabled(mode: mode)
                 if dashboardURL == controller.currentURL {
                     controller.setUpdateBridgeEnabled(updateBridgeEnabled)
@@ -1097,6 +1098,7 @@ extension DashboardManager {
                     completion, target: target, sourceURL: sourceURL)
             }
         }
+        controller.nativeGatewayAuthProvider = configuration.nativeAuthProvider
         controller.onGatewayHealthChanged = { [weak self, weak controller] in
             guard let self, let controller, self.target(for: controller) != nil else { return }
             self.publishGatewaySnapshots()
@@ -1134,6 +1136,7 @@ extension DashboardManager {
                     source, configuration: configuration, target: target, present: present)
             } else {
                 // The URL can be unchanged while the document is a failure page.
+                source.nativeGatewayAuthProvider = configuration.nativeAuthProvider
                 source.show(
                     url: configuration.url,
                     auth: configuration.auth,

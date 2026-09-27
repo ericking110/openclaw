@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import JavaScriptCore
 import OpenClawKit
 import Testing
 import WebKit
@@ -164,7 +165,7 @@ struct DashboardGatewayCatalogTests {
 
 @MainActor
 struct DashboardGatewaysBridgeTests {
-    @Test func `gateway script contains metadata and no credentials`() {
+    @Test func `gateway script publishes metadata and emits its change event`() throws {
         let snapshot = DashboardGatewaySnapshot(
             gateways: [.init(
                 id: "primary",
@@ -175,10 +176,23 @@ struct DashboardGatewaysBridgeTests {
                 health: .ok)],
             currentId: "primary")
         let script = DashboardWindowController.nativeGatewaysScriptSource(snapshot: snapshot, dispatch: true)
-        #expect(script.contains("__OPENCLAW_NATIVE_GATEWAYS__"))
-        #expect(script.contains("openclaw:native-gateways-changed"))
-        #expect(!script.contains("token"))
-        #expect(!script.contains("password"))
+        let context = try #require(JSContext())
+        context.evaluateScript("""
+        var window = globalThis;
+        var publishedEvent;
+        class CustomEvent { constructor(type) { this.type = type; } }
+        window.dispatchEvent = event => { publishedEvent = event.type; };
+        """)
+        context.evaluateScript(script)
+        #expect(context.exception == nil)
+        #expect(context.objectForKeyedSubscript("publishedEvent").toString() == "openclaw:native-gateways-changed")
+        let value = try #require(context.objectForKeyedSubscript("__OPENCLAW_NATIVE_GATEWAYS__").toDictionary())
+        #expect(value["currentId"] as? String == "primary")
+        let entries = try #require(value["gateways"] as? [[String: Any]])
+        #expect(entries.count == 1)
+        #expect(entries[0]["name"] as? String == "Local Gateway")
+        #expect(entries[0]["token"] == nil)
+        #expect(entries[0]["password"] == nil)
     }
 
     @Test func `dashboard controller retains profile TLS policy`() throws {
@@ -399,7 +413,7 @@ struct DashboardManagerGatewayTargetTests {
             let primaryAutosaveName = try #require(auxiliary.controller.window?.frameAutosaveName)
             #expect(primaryAutosaveName.hasPrefix("OpenClawDashboardWindow-Test-"))
             #expect(!auxiliary.controller._testUpdateBridgeAvailable)
-            #expect(auxiliary.controller.currentURL == replacementServer.url("/#token=primary-token"))
+            #expect(auxiliary.controller.currentURL == replacementServer.url("/"))
             #expect(auxiliary.controller._testDashboardDataStore === dataStore)
             #expect(!auxiliary.controller._testDashboardDataStore.isPersistent)
             try auxiliary.controller.nativeBrowser.open(
@@ -704,9 +718,9 @@ struct DashboardManagerGatewayTargetTests {
         #expect(refreshed.allSatisfy { $0.controller.auth.token == "after" })
         #expect(refreshed.allSatisfy { instance in windows.contains { $0 === instance.controller.window } })
         for instance in refreshed {
-            let scripts = instance.controller._testUserScripts.map(\.source).joined()
-            #expect(scripts.contains("after"))
-            #expect(!scripts.contains("before"))
+            let bootstrap = try await dashboardNativeAuthSnapshot(instance.controller)
+            #expect(bootstrap["nativeConnectAuth"] as? Bool == true)
+            #expect(bootstrap["token"] is NSNull)
         }
     }
 
@@ -968,8 +982,7 @@ struct DashboardManagerGatewayTargetTests {
         #expect(autosaveName.hasPrefix("OpenClawDashboardWindow-Test-"))
         #expect(autosaveName.hasSuffix("-\(studio)"))
 
-        manager.openOrFocusDashboard(for: .profile(studio))
-        try await Task.sleep(for: .milliseconds(100))
+        await manager.openOrFocusDashboard(for: .profile(studio)).value
         #expect(manager._testAuxiliaryWindows().count == 1)
         #expect(manager._testAuxiliaryWindows().first?.controller.window === window)
         #expect(manager.frontmostDashboardTarget == .profile(studio))

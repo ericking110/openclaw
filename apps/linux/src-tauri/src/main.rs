@@ -6,6 +6,7 @@ mod desktop_node;
 mod desktop_node_process;
 mod discovery;
 mod gateway;
+mod gateway_control_auth;
 mod gateway_device_identity;
 mod gateway_operation_queue;
 mod gateway_profiles;
@@ -68,6 +69,7 @@ pub(crate) fn native_auth_initialization_script(
     dashboard: &Url,
     gateway: &Url,
     request: &RemoteGatewayRequest,
+    native_session: bool,
 ) -> Result<String, String> {
     if request.transport == "direct" && request.tls_fingerprint.is_some() {
         return Err(
@@ -75,6 +77,9 @@ pub(crate) fn native_auth_initialization_script(
              Connect using Remote over SSH instead."
                 .to_string(),
         );
+    }
+    if native_session {
+        return gateway_control_auth::initialization_script(dashboard, gateway);
     }
     let path = dashboard.path().trim_end_matches('/');
     let origin = serde_json::to_string(&dashboard.origin().ascii_serialization())
@@ -259,7 +264,8 @@ mod native_browser_tests {
         let dashboard = Url::parse("https://gateway.example.com/openclaw").expect("dashboard");
         let gateway = Url::parse("wss://gateway.example.com/openclaw").expect("Gateway");
         let initialization_script =
-            native_auth_initialization_script(&dashboard, &gateway, &request).expect("auth script");
+            native_auth_initialization_script(&dashboard, &gateway, &request, false)
+                .expect("auth script");
         assert!(!dashboard.as_str().contains("fixture-password"));
         assert!(!gateway.as_str().contains("fixture-password"));
 
@@ -294,6 +300,41 @@ mod native_browser_tests {
     }
 
     #[test]
+    fn native_primary_dashboard_keeps_bootstrap_credentials_out_of_the_document() {
+        let request: RemoteGatewayRequest = serde_json::from_value(serde_json::json!({
+            "transport": "direct", "url": "https://gateway.example.com/control",
+            "token": "fixture-shared-secret", "password": "fixture-password",
+        }))
+        .unwrap();
+        let script = native_auth_initialization_script(
+            &Url::parse("https://gateway.example.com/control").unwrap(),
+            &Url::parse("wss://gateway.example.com/control").unwrap(),
+            &request,
+            true,
+        )
+        .unwrap();
+        let runner = r#"
+            const window = {addEventListener() {}, __TAURI_INTERNALS__: {invoke() {}}};
+            window.top = window;
+            new Function('window', 'location', process.argv[1])(window, {origin: 'https://gateway.example.com', pathname: '/control/chat'});
+            const auth = window.__OPENCLAW_NATIVE_CONTROL_AUTH__;
+            if (!auth?.nativeConnectAuth || auth.gatewayUrl !== 'wss://gateway.example.com/control' || auth.token !== null || 'password' in auth) {
+              throw new Error('Primary must use native challenge authentication, not bootstrap credentials');
+            }
+            if (typeof window.OpenClawNativeGatewayAuth?.postMessage !== 'function') throw new Error('native challenge bridge missing');
+        "#;
+        let result = Command::new("node")
+            .args(["-e", runner, &script])
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
+
+    #[test]
     fn pinned_remote_gateway_never_receives_credentials_through_an_unpinned_webview() {
         let request: RemoteGatewayRequest = serde_json::from_value(serde_json::json!({
             "transport": "direct",
@@ -304,7 +345,7 @@ mod native_browser_tests {
         .expect("pinned remote request");
         let dashboard = Url::parse("https://gateway.example.com/openclaw").expect("dashboard");
         let gateway = Url::parse("wss://gateway.example.com/openclaw").expect("Gateway");
-        let result = native_auth_initialization_script(&dashboard, &gateway, &request);
+        let result = native_auth_initialization_script(&dashboard, &gateway, &request, false);
 
         assert!(
             result.is_err(),
@@ -323,8 +364,13 @@ mod native_browser_tests {
         let tunneled_dashboard = Url::parse("http://127.0.0.1:18789").expect("tunneled dashboard");
         let tunneled_gateway = Url::parse("ws://127.0.0.1:18789").expect("tunneled Gateway");
         assert!(
-            native_auth_initialization_script(&tunneled_dashboard, &tunneled_gateway, &tunneled)
-                .is_ok(),
+            native_auth_initialization_script(
+                &tunneled_dashboard,
+                &tunneled_gateway,
+                &tunneled,
+                false
+            )
+            .is_ok(),
             "host-key-verified SSH tunneling must remain available"
         );
     }
@@ -1035,7 +1081,7 @@ impl DesktopState {
             )?;
         }
         let target = remote_gateway::dashboard_url(&gateway_url)?;
-        let script = native_auth_initialization_script(&target, &gateway_url, &request)?;
+        let script = native_auth_initialization_script(&target, &gateway_url, &request, true)?;
         let pending = Arc::new(Mutex::new(tunnel));
         let commit_pending = Arc::clone(&pending);
         let result = self.on_main(app, move |state, app| {

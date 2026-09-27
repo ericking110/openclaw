@@ -62,17 +62,20 @@ extension DashboardWindowController {
         url: URL,
         auth: DashboardWindowAuth)
     {
-        guard auth.hasCredential || auth.usesBrowserIdentity else { return }
+        guard auth.hasCredential || auth.usesBrowserIdentity || auth.usesNativeDevice else { return }
         let credentials: [String: Any?] = [
             "gatewayUrl": auth.gatewayUrl,
             "token": auth.token,
             "password": auth.password,
         ]
         var payload = credentials.compactMapValues { $0 }
-        if auth.usesBrowserIdentity {
+        if auth.usesBrowserIdentity || auth.usesNativeDevice {
             // Explicit absence retires an earlier shared login at this browser origin.
             payload["token"] = NSNull()
             payload["password"] = NSNull()
+        }
+        if auth.usesNativeDevice {
+            payload["nativeConnectAuth"] = true
         }
         guard let data = try? JSONSerialization.data(withJSONObject: payload),
               let json = String(data: data, encoding: .utf8)

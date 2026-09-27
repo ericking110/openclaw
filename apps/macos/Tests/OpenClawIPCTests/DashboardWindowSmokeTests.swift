@@ -64,6 +64,7 @@ struct DashboardWindowSmokeTests {
             styleMask: [.titled, .resizable],
             backing: .buffered,
             defer: false)
+        defer { window.close() }
         let dragRegion = DashboardWindowDragRegionView(
             frame: NSRect(x: 0, y: 0, width: 300, height: 12))
         window.contentView = dragRegion
@@ -666,54 +667,42 @@ extension DashboardWindowSmokeTests {
     }
 
     @Test func `dashboard native chrome clears both desktop sidebars`() async throws {
-        let server = try await DashboardHTTPFixture.start()
+        let server = try await DashboardHTTPFixture.start(html: """
+        <html><head></head><body><div class="sidebar-shell"></div>
+        <div class="settings-sidebar__header"></div></body></html>
+        """, contentSecurityPolicy: "default-src 'none'; style-src 'unsafe-inline'")
         defer { server.stop() }
-        let url = server.url("/control/")
         let controller = DashboardWindowController(
-            url: url,
+            url: server.url("/control/"),
             auth: DashboardWindowAuth(gatewayUrl: nil, token: nil, password: nil),
-            websiteDataStore: .nonPersistent(),
-            windowAutosaveName: "",
+            websiteDataStore: .nonPersistent(), windowAutosaveName: "",
             requestBrowserProfileImportOffer: { _ in false })
         defer { controller.closeDashboard() }
-        let chromeScript = try #require(controller._testUserScripts.first {
-            $0.source.contains("openclaw-native-macos-chrome")
-        })
-
-        // Narrow widths are styled by the Control UI's own compact drawer-row
-        // rules (layout.mobile.css); only the desktop sidebar surfaces need
-        // native padding injected here.
-        #expect(chromeScript.source.contains(".sidebar-shell"))
-        #expect(chromeScript.source.contains(".settings-sidebar__header"))
-        #expect(chromeScript.source.contains("min-width: 700px"))
-        // Keep the injected titlebar height in lockstep with the 52pt unified
-        // toolbar in makeWindow(); the two must match for the traffic lights and
-        // the hosted web buttons to share one vertical center.
-        #expect(chromeScript.source.contains("--openclaw-native-titlebar-height: 52px"))
-        #expect(!chromeScript.source.contains("max-width: 1100px"))
-        #expect(chromeScript.source.contains("openclaw-native-web-chrome"))
-        #expect(!chromeScript.source.contains("openclaw-native-nav"))
-        #expect(chromeScript.injectionTime == .atDocumentEnd)
-        #expect(chromeScript.isForMainFrameOnly)
+        controller.show()
+        try await waitForNativeDashboardDocument(controller)
+        let padding = try await controller.webView.evaluateJavaScript("""
+        Array.from(document.querySelectorAll('.sidebar-shell, .settings-sidebar__header'))
+          .map(element => getComputedStyle(element).paddingTop)
+        """) as? [String]
+        #expect(padding == ["52px", "52px"])
+        #expect(try await controller.webView.evaluateJavaScript(
+            "document.documentElement.classList.contains('openclaw-native-web-chrome')") as? Bool == true)
     }
 
     @Test func `dashboard advertises web titlebar chrome before document load`() async throws {
-        let server = try await DashboardHTTPFixture.start()
+        let server = try await DashboardHTTPFixture.start(
+            html: "<html><head><script>window.initialChrome = window.__OPENCLAW_NATIVE_WEB_CHROME__;</script></head></html>",
+            contentSecurityPolicy: "default-src 'none'; script-src 'unsafe-inline'")
         defer { server.stop() }
-        let url = server.url("/control/")
         let controller = DashboardWindowController(
-            url: url,
+            url: server.url("/control/"),
             auth: DashboardWindowAuth(gatewayUrl: nil, token: nil, password: nil),
-            websiteDataStore: .nonPersistent(),
-            windowAutosaveName: "",
+            websiteDataStore: .nonPersistent(), windowAutosaveName: "",
             requestBrowserProfileImportOffer: { _ in false })
         defer { controller.closeDashboard() }
-        let capabilityScript = try #require(controller._testUserScripts.first {
-            $0.source.contains("__OPENCLAW_NATIVE_WEB_CHROME__")
-        })
-
-        #expect(capabilityScript.injectionTime == .atDocumentStart)
-        #expect(capabilityScript.isForMainFrameOnly)
+        controller.show()
+        try await waitForNativeDashboardDocument(controller)
+        #expect(try await controller.webView.evaluateJavaScript("window.initialChrome") as? Bool == true)
         #expect(controller.window?.titlebarAccessoryViewControllers.isEmpty == true)
         #expect(controller._testAllowsBackForwardGestures)
     }
@@ -791,13 +780,11 @@ extension DashboardWindowSmokeTests {
         #expect(replacement !== controller)
         #expect(replacement.window === window)
         #expect(window.isVisible)
-        #expect(replacement.currentURL.absoluteString == replacementServer.url("/#token=device-token").absoluteString)
-        let authScripts = replacement._testUserScripts
-            .filter { $0.source.contains("__OPENCLAW_NATIVE_CONTROL_AUTH__") }
-        #expect(authScripts.count == 1)
-        // JSONSerialization escapes "/" so match on host:port, not the full origin.
-        #expect(authScripts.first?.source.contains("127.0.0.1:\(replacementServer.port)") == true)
-        #expect(authScripts.first?.source.contains(String(server.port)) == false)
+        #expect(replacement.currentURL.absoluteString == replacementServer.url("/").absoluteString)
+        let bootstrap = try await dashboardNativeAuthSnapshot(replacement)
+        #expect(bootstrap["gatewayUrl"] as? String == replacementServer.websocketURL().absoluteString)
+        #expect(bootstrap["nativeConnectAuth"] as? Bool == true)
+        #expect(bootstrap["token"] is NSNull)
     }
 
     @Test func `dashboard retires its web view while endpoint is unavailable`() async throws {
@@ -872,12 +859,11 @@ extension DashboardWindowSmokeTests {
         #expect(routeBController !== routeAController)
         #expect(!routeAController.isWindowOpen)
         #expect(routeBController.currentURL.absoluteString ==
-            server.url("/#token=route-b-device-token").absoluteString)
-        let scripts = routeBController._testUserScripts
-            .filter { $0.source.contains("__OPENCLAW_NATIVE_CONTROL_AUTH__") }
-        #expect(scripts.count == 1)
-        #expect(scripts[0].source.contains("route-b-device-token"))
-        #expect(!scripts[0].source.contains("route-a-device-token"))
+            server.url("/").absoluteString)
+        let bootstrap = try await dashboardNativeAuthSnapshot(routeBController)
+        #expect(bootstrap["nativeConnectAuth"] as? Bool == true)
+        #expect(bootstrap["token"] is NSNull)
+        #expect(routeBController.auth.token == "route-b-device-token")
     }
 
     @Test func `route change without fresh credential blanks prior dashboard`() async throws {
@@ -911,9 +897,8 @@ extension DashboardWindowSmokeTests {
         #expect(replacement !== controller)
         #expect(!controller.isWindowOpen)
         #expect(replacement.currentURL == URL(string: "about:blank"))
-        let scripts = replacement._testUserScripts
-            .filter { $0.source.contains("__OPENCLAW_NATIVE_CONTROL_AUTH__") }
-        #expect(!scripts.contains { $0.source.contains("route-a-device-token") })
+        #expect(replacement.auth.token == nil)
+        #expect(replacement.nativeGatewayAuthProvider == nil)
     }
 
     @Test func `dashboard ignores endpoint changes while window is closed`() async throws {

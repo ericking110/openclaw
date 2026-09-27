@@ -1087,7 +1087,7 @@ fn isolated_browser_document(label: &str, target: &str) -> bool {
     label != "main" || target != PRIMARY
 }
 
-fn matches_route(candidate: &Url, expected: &Url) -> bool {
+pub(crate) fn matches_route(candidate: &Url, expected: &Url) -> bool {
     if !crate::external_browser_url_allowed(candidate) || candidate.origin() != expected.origin() {
         return false;
     }
@@ -1717,7 +1717,7 @@ fn prepare(app: &AppHandle, intent: &Intent) -> Result<Prepared, String> {
     };
     let url = remote_gateway::dashboard_url(&gateway)?;
     let auth_script = Some(crate::native_auth_initialization_script(
-        &url, &gateway, request,
+        &url, &gateway, request, false,
     )?);
     Ok(Prepared {
         route: Route { url, auth_script },
@@ -2627,6 +2627,27 @@ pub(crate) fn open_settings(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+fn authorize_control_auth(
+    state: &Routing,
+    source: &DocumentAuthority,
+    url: &Url,
+) -> Result<(), String> {
+    let route = state.windows.get(&source.label).ok_or(STALE)?;
+    let doc = route.document.as_ref().ok_or(STALE)?;
+    if state.closing
+        || state.primary_ownership != Some(GatewayOwnership::Remote)
+        || route.target != PRIMARY
+        || route.primary_generation != Some(state.primary_generation)
+        || doc.phase != NavigationPhase::Active
+        || doc.lifetime != source.lifetime
+        || doc.nonce.as_deref() != Some(&source.nonce)
+        || !matches_route(url, &doc.url)
+    {
+        return Err(STALE.into());
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub(crate) async fn gateway_request(
     app: AppHandle,
@@ -2646,6 +2667,39 @@ pub(crate) async fn gateway_request(
         .unwrap_or(PRIMARY)
         .to_string();
     match action {
+        "connectAuth" => {
+            let challenge: crate::gateway_control_auth::Challenge = serde_json::from_value(
+                message
+                    .get("challenge")
+                    .cloned()
+                    .ok_or("Missing native authentication challenge.")?,
+            )
+            .map_err(|_| "Invalid native authentication challenge.")?;
+            challenge.validate()?;
+            let client = app
+                .state::<crate::gateway_ws::GatewayClient>()
+                .inner()
+                .clone();
+            let generation = client.generation();
+            {
+                let owner = app.state::<GatewayWindows>();
+                let state = owner.routing.lock().map_err(|_| STALE)?;
+                authorize_control_auth(&state, &source, &webview.url().map_err(|_| STALE)?)?;
+            }
+            client.activate(app.clone());
+            client.wait_for_native_control_auth(generation).await?;
+            return on_main(&app, move |app| {
+                let owner = app.state::<GatewayWindows>();
+                let view = app.get_webview(&source.label).ok_or(STALE)?;
+                let url = view.url().map_err(|_| STALE)?;
+                let state = owner.routing.lock().map_err(|_| STALE)?;
+                authorize_control_auth(&state, &source, &url)?;
+                // Routing is UI-thread owned; keep it held until the live RPC owner signs.
+                let result = client.native_control_auth(generation, &url, &challenge)?;
+                Ok(json!({"id":challenge.id,"result":result}))
+            })
+            .await;
+        }
         "select" | "reconnect" => {
             let remember = action == "select";
             select(app, label, target, Some(source), remember).await?;
@@ -4541,3 +4595,7 @@ mod tests {
         assert_eq!(state.main_presentation(), MainPresentation::Preserve);
     }
 }
+
+#[cfg(test)]
+#[path = "gateway_control_auth_route_tests.rs"]
+mod native_control_auth_tests;

@@ -23,6 +23,7 @@ extension DashboardManager {
         var browserSession: GatewayBrowserSession?
         var signedOut: DashboardFailurePage.SignedOut?
         var autoStartSignIn = false
+        var nativeAuthProvider: DashboardNativeGatewayAuth.Provider?
     }
 
     struct SupersededDashboardPresentation: Error {}
@@ -140,6 +141,7 @@ extension DashboardManager {
         present: Bool,
         restoringRoute: URL? = nil)
     {
+        controller.nativeGatewayAuthProvider = configuration.nativeAuthProvider
         if let page = configuration.signedOut {
             controller.showSignedOut(page, present: present, autoStart: configuration.autoStartSignIn)
         } else if present {
@@ -213,15 +215,16 @@ extension DashboardManager {
         let identityURL = mode == .remote
             ? try await browserIdentityURLProvider(target, config)
             : nil
-        let dashboardConfig: GatewayConnection.Config = browserSession == nil
-            ? config : (url: config.url, token: nil, password: nil)
+        // Device credentials are handed off only after the dashboard challenge;
+        // neither the navigation URL nor document-start script carries a bearer.
+        let dashboardConfig: GatewayConnection.Config = (url: config.url, token: nil, password: nil)
         let url = try identityURL ?? GatewayEndpointStore.dashboardURL(
-            for: dashboardConfig, mode: mode, authToken: browserSession == nil ? token : nil)
+            for: dashboardConfig, mode: mode)
         try browserSession?.validate(for: url)
         let auth: DashboardWindowAuth = if identityURL != nil || browserSession != nil {
             .browserIdentity(gatewayUrl: Self.websocketURLString(for: url))
         } else {
-            DashboardWindowAuth(
+            .nativeDevice(
                 gatewayUrl: Self.websocketURLString(for: url),
                 token: token,
                 password: config.password?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty)
@@ -236,7 +239,22 @@ extension DashboardManager {
             tlsParams: identityURL == nil && browserSession == nil ? endpoint.tls?.params : nil,
             mode: mode,
             displayName: name,
-            browserSession: browserSession)
+            browserSession: browserSession,
+            nativeAuthProvider: auth.usesNativeDevice ? self
+                .nativeAuthProvider(target: target, endpoint: endpoint) : nil)
+    }
+}
+
+extension DashboardManager {
+    func nativeAuthProvider(
+        target: DashboardGatewayTarget,
+        endpoint: GatewayConnection.EndpointSnapshot) -> DashboardNativeGatewayAuth.Provider
+    {
+        let connectionProvider = self.connectionProvider
+        return { nonce, signedAt in
+            let connection = await connectionProvider(target)
+            return try await connection.controlUiNativeAuth(endpoint: endpoint, nonce: nonce, signedAt: signedAt)
+        }
     }
 }
 

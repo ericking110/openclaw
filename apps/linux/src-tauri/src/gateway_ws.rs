@@ -1,3 +1,4 @@
+use crate::gateway_control_auth::{Challenge, NativeControlSession};
 use crate::gateway_device_identity::{
     GatewayAuth, GatewayDeviceIdentity, GatewayDeviceIdentityStore, CLIENT_DEVICE_FAMILY,
     CLIENT_ID, CLIENT_MODE, CLIENT_PLATFORM, CLIENT_ROLE, CLIENT_SCOPES,
@@ -27,7 +28,6 @@ use std::net::IpAddr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-#[cfg(any(target_os = "linux", test))]
 use tauri::Url;
 use tauri::{AppHandle, Emitter, Manager, Webview};
 use tokio::sync::{mpsc, oneshot};
@@ -401,6 +401,9 @@ struct GatewayClientInner {
     commands: Mutex<Option<mpsc::Sender<DriverCommand>>>,
     agents_cache: Mutex<Option<CachedAgents>>,
     identity: Mutex<Option<GatewayDeviceIdentityStore>>,
+    native_control_session: Mutex<Option<NativeControlSession>>,
+    connection_changed: tokio::sync::Notify,
+    remote_dashboard_demand: AtomicBool,
     canvas_surface: Mutex<CanvasSurfaceState>,
     user_accent: Mutex<Option<String>>,
     connection_notice: Mutex<Option<String>>,
@@ -561,7 +564,19 @@ impl GatewayClient {
             .config
             .lock()
             .expect("gateway config mutex poisoned");
+        self.inner.remote_dashboard_demand.store(
+            config
+                .as_ref()
+                .is_some_and(|config| config.ownership == GatewayOwnership::Remote),
+            Ordering::SeqCst,
+        );
         *current = config;
+        *self
+            .inner
+            .native_control_session
+            .lock()
+            .expect("native control session mutex poisoned") = None;
+        self.inner.connection_changed.notify_waiters();
         let generation = self.inner.config_generation.fetch_add(1, Ordering::SeqCst) + 1;
         *self
             .inner
@@ -580,6 +595,88 @@ impl GatewayClient {
             .connection_state
             .store(GatewayConnectionState::Down as u64, Ordering::SeqCst);
         generation
+    }
+
+    pub(crate) async fn wait_for_native_control_auth(
+        &self,
+        generation: GatewayGeneration,
+    ) -> Result<(), String> {
+        tokio::time::timeout(REQUEST_TIMEOUT, async {
+            loop {
+                let changed = self.inner.connection_changed.notified();
+                tokio::pin!(changed);
+                changed.as_mut().enable();
+                self.with_generation(generation, || Ok(()))?;
+                if self.is_connected() {
+                    return Ok(());
+                }
+                if self.inner.reconnect_paused.load(Ordering::SeqCst) {
+                    return Err(self
+                        .inner
+                        .connection_notice
+                        .lock()
+                        .ok()
+                        .and_then(|notice| notice.clone())
+                        .unwrap_or_else(|| {
+                            "Connect the native app to this Gateway before opening its dashboard."
+                                .into()
+                        }));
+                }
+                changed.await;
+            }
+        })
+        .await
+        .map_err(|_| {
+            "The native Gateway connection is not ready. Retry after the app connects.".to_string()
+        })?
+    }
+
+    pub(crate) fn native_control_auth(
+        &self,
+        generation: GatewayGeneration,
+        dashboard: &Url,
+        challenge: &Challenge,
+    ) -> Result<Value, String> {
+        challenge.validate()?;
+        let config = self
+            .inner
+            .config
+            .lock()
+            .map_err(|_| "Gateway configuration unavailable.")?;
+        let config = config
+            .as_ref()
+            .ok_or("Connect the native app to this Gateway first.")?;
+        let expected = crate::remote_gateway::dashboard_url(
+            &Url::parse(&config.ws_url).map_err(|_| "Invalid native Gateway address.")?,
+        )?;
+        if self.generation() != generation
+            || !self.is_connected()
+            || config.ownership != GatewayOwnership::Remote
+            || !crate::gateway_windows::matches_route(dashboard, &expected)
+        {
+            return Err("The native Gateway connection changed. Reconnect the dashboard.".into());
+        }
+        let session = self
+            .inner
+            .native_control_session
+            .lock()
+            .map_err(|_| "Native authentication unavailable.")?;
+        let session = session.as_ref().ok_or(
+            "The native Gateway has not accepted dashboard authentication. Reconnect the app.",
+        )?;
+        let store = self
+            .inner
+            .identity
+            .lock()
+            .map_err(|_| "Native identity unavailable.")?;
+        let store = store.as_ref().ok_or("Native identity unavailable.")?;
+        let auth = session.current_auth(store, &config.ws_url)?;
+        crate::gateway_control_auth::connect_auth(
+            &store.identity(),
+            &auth,
+            &session.scopes,
+            challenge,
+        )
     }
 
     pub fn activate(&self, app: AppHandle) {
@@ -894,7 +991,8 @@ impl GatewayClient {
         loop {
             if !driver_should_run(
                 app.get_window(QUICKCHAT_LABEL).is_some()
-                    || self.inner.desktop_demand.load(Ordering::SeqCst),
+                    || self.inner.desktop_demand.load(Ordering::SeqCst)
+                    || self.inner.remote_dashboard_demand.load(Ordering::SeqCst),
                 self.inner.sleep_cycle_depth.load(Ordering::SeqCst) > 0,
             ) {
                 self.inner.reconnect_paused.store(false, Ordering::SeqCst);
@@ -976,7 +1074,8 @@ impl GatewayClient {
             }
             if !driver_should_run(
                 app.get_window(QUICKCHAT_LABEL).is_some()
-                    || self.inner.desktop_demand.load(Ordering::SeqCst),
+                    || self.inner.desktop_demand.load(Ordering::SeqCst)
+                    || self.inner.remote_dashboard_demand.load(Ordering::SeqCst),
                 self.inner.sleep_cycle_depth.load(Ordering::SeqCst) > 0,
             ) {
                 continue;
@@ -1046,7 +1145,6 @@ impl GatewayClient {
                     return Err(failure);
                 }
             };
-        drop(auth);
         let hello = validate_hello(session.hello().clone()).map_err(RequestFailure::transport)?;
         if let Some(device_token) = hello.device_token.as_deref() {
             self.persist_device_token(&config.ws_url, device_token)?;
@@ -1079,6 +1177,21 @@ impl GatewayClient {
         self.cache_agents(GatewayGeneration(generation), agents)
             .map_err(|message| RequestFailure::method_with_details(message, None))?;
         self.set_user_accent(generation, accent);
+        self.with_generation(GatewayGeneration(generation), || {
+            *self
+                .inner
+                .native_control_session
+                .lock()
+                .map_err(|_| "Native authentication unavailable.")? =
+                NativeControlSession::from_hello(
+                    auth,
+                    hello.auth_method.as_deref(),
+                    hello.operator_scopes,
+                    hello.device_token.as_deref(),
+                );
+            Ok(())
+        })
+        .map_err(RequestFailure::transport)?;
         self.set_connection_state_for_generation(
             app,
             GatewayConnectionState::Up,
@@ -1092,7 +1205,8 @@ impl GatewayClient {
             if self.inner.config_generation.load(Ordering::SeqCst) != generation
                 || !driver_should_run(
                     app.get_window(QUICKCHAT_LABEL).is_some()
-                        || self.inner.desktop_demand.load(Ordering::SeqCst),
+                        || self.inner.desktop_demand.load(Ordering::SeqCst)
+                        || self.inner.remote_dashboard_demand.load(Ordering::SeqCst),
                     self.inner.sleep_cycle_depth.load(Ordering::SeqCst) > 0,
                 )
             {
@@ -1352,6 +1466,11 @@ impl GatewayClient {
             if state != GatewayConnectionState::Up {
                 *self
                     .inner
+                    .native_control_session
+                    .lock()
+                    .expect("native control session mutex poisoned") = None;
+                *self
+                    .inner
                     .agents_cache
                     .lock()
                     .expect("gateway agents cache mutex poisoned") = None;
@@ -1403,6 +1522,7 @@ impl GatewayClient {
                 generation,
             )))
         });
+        self.inner.connection_changed.notify_waiters();
         if let Ok(Some(event)) = event {
             let _ = app.emit_to(QUICKCHAT_LABEL, GATEWAY_STATE_EVENT, event);
         }
@@ -1987,6 +2107,8 @@ fn gateway_user_accent(config: &Value) -> Option<String> {
 
 struct ValidatedHello {
     device_token: Option<String>,
+    auth_method: Option<String>,
+    operator_scopes: Option<Vec<String>>,
     tick_watch_timeout: Duration,
     canvas_surface_url: Option<String>,
 }
@@ -2020,6 +2142,9 @@ fn validate_hello(payload: Value) -> Result<ValidatedHello, String> {
     #[serde(rename_all = "camelCase")]
     struct HelloAuth {
         device_token: Option<String>,
+        method: Option<String>,
+        role: Option<String>,
+        scopes: Option<Vec<String>>,
     }
     #[derive(Deserialize)]
     #[serde(rename_all = "camelCase")]
@@ -2055,6 +2180,10 @@ fn validate_hello(payload: Value) -> Result<ValidatedHello, String> {
         .filter(|value| !value.is_empty());
     Ok(ValidatedHello {
         device_token: hello.auth.device_token,
+        auth_method: hello.auth.method,
+        operator_scopes: (hello.auth.role.as_deref() == Some(CLIENT_ROLE))
+            .then_some(hello.auth.scopes)
+            .flatten(),
         tick_watch_timeout: Duration::from_millis(tick_interval_ms).saturating_mul(2),
         canvas_surface_url,
     })
@@ -4250,11 +4379,10 @@ esac
             .expect("gateway command mutex poisoned") = Some(commands);
 
         client.resume_paused_reconnect();
-        assert!(
-            tokio::time::timeout(Duration::from_millis(25), receiver.recv())
-                .await
-                .is_err()
-        );
+        assert!(matches!(
+            receiver.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty)
+        ));
 
         client.inner.reconnect_paused.store(true, Ordering::SeqCst);
         client.resume_paused_reconnect();
@@ -4356,3 +4484,7 @@ esac
         );
     }
 }
+
+#[cfg(test)]
+#[path = "gateway_control_auth_owner_tests.rs"]
+mod native_control_auth_tests;
