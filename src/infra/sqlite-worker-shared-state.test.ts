@@ -1,4 +1,13 @@
-import { existsSync, linkSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import {
+  existsSync,
+  linkSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { Worker } from "node:worker_threads";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -370,6 +379,68 @@ describe("canonical shared-state worker admission", () => {
     ).toBeUndefined();
     expect(existsSync(captured.admission.databasePath)).toBe(false);
   });
+
+  it.runIf(process.platform === "darwin" && existsSync("/usr/bin/SetFile"))(
+    "refuses a lazy write after the same inode has a changed birthtime",
+    async () => {
+      const seeded = context();
+      const databasePath = seeded.admission.databasePath;
+      writeConfigMachineState(
+        "plugins.installedIndex",
+        { plugins: [] },
+        {
+          path: databasePath,
+          env: seeded.environment,
+        },
+      );
+      await closeOpenClawStateDatabaseAsync();
+      const captured = captureOpenClawStateWorkerContext({
+        path: databasePath,
+        env: seeded.environment,
+      });
+      await runOpenClawStateWorkerOperation(
+        captured,
+        (scope) =>
+          scope.execute({
+            type: "plugins.metadata.read",
+            input: { selector: "installed-index", artifactPreservingReadOnly: true },
+          }),
+        { existingOnly: true },
+      );
+      const before = statSync(databasePath, { bigint: true });
+      const beforeBytes = readFileSync(databasePath);
+      // macOS can change birth time without reallocating the inode.
+      execFileSync("/usr/bin/SetFile", ["-d", "01/02/2000 03:04:05", databasePath]);
+      const after = statSync(databasePath, { bigint: true });
+      expect([after.dev, after.ino]).toEqual([before.dev, before.ino]);
+      expect(after.birthtimeNs).not.toBe(before.birthtimeNs);
+      const input = {
+        configPath: "/synthetic/changed-birthtime.json",
+        patch: { last_observed_suspicious_signature: "must-stay-absent" },
+        expected: null,
+        updatedAtMs: 100,
+      };
+      let failure: unknown;
+      try {
+        await executeOpenClawStateWorker(captured, { type: "config.health.patch", input });
+      } catch (error) {
+        failure = error;
+      }
+      const bytesUnchanged = readFileSync(databasePath).equals(beforeBytes);
+      const sidecars = [databasePath + "-wal", databasePath + "-shm"].filter(existsSync);
+      await closeOpenClawStateDatabaseAsync();
+      const database = openOpenClawStateDatabase({ path: databasePath, env: seeded.environment });
+      const row = database.db
+        .prepare(
+          "SELECT last_observed_suspicious_signature FROM config_health_entries WHERE config_path = ?",
+        )
+        .get(input.configPath);
+      expect(failure).toMatchObject({ message: expect.stringContaining("identity changed") });
+      expect(bytesUnchanged).toBe(true);
+      expect(sidecars).toEqual([]);
+      expect(row).toBeUndefined();
+    },
+  );
 
   it.each(["config health", "device identity", "audit"] as const)(
     "does not recreate a lazy actor's removed opening path through a warm hardlink (%s)",

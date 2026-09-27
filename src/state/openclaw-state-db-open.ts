@@ -89,7 +89,10 @@ export function openUnpublishedStateDatabase(
         : statSync(params.pathname, { bigint: true, throwIfNoEntry: false });
     if (
       existingIdentity &&
-      (!original || `file:${original.dev}:${original.ino}` !== existingIdentity)
+      (!original ||
+        `file:${original.dev}:${original.ino}` !== existingIdentity.key ||
+        (existingIdentity.birthtime !== undefined &&
+          original.birthtimeNs.toString() !== existingIdentity.birthtime))
     ) {
       throw new Error("SQLite database file identity changed before existing-only open");
     }

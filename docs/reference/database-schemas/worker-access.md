@@ -103,8 +103,10 @@ owner's physical path admission separately from the original caller's schema sco
 Each requesting caller still needs complete live admission. A retired secondary
 alias closes only its client, so healthy peers can continue while
 that client's callbacks settle. Losing the actor's opening path requires its active
-work to settle before replacement. A lazy actor also retains its factory's
-existing-file identity until its first writable native open. That cold open refuses
+work to settle before replacement. A lazy actor retains the existing-file generation
+observed locally by its factory, including available birth time, until its first
+writable native open. The generic broker's supplied file-key contract is unchanged.
+That cold open refuses
 a missing or replaced source before acquiring schema authority or creating files,
 including device identity and audit writers. An external removal that has not yet
 reached cold path binding does not authorize recreating the actor's opening path.

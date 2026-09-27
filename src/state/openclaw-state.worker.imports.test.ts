@@ -29,13 +29,13 @@ it("prepares cold plugin-state reads without unrelated commands or creating a da
     const databasePath = openOpenClawStateDatabase().path;
     await closeOpenClawStateDatabaseAsync();
     const context = captureOpenClawStateWorkerContext();
-    unlinkSync(databasePath);
     const backend = runWithSqliteWorkerStateContext(context, () =>
       openExistingSqliteWorkerBackend(undefined, {
         databasePath,
         existingIdentity: context.admission.identity.key,
       }),
     );
+    unlinkSync(databasePath);
     try {
       expect(existsSync(databasePath)).toBe(false);
       await backend[SQLITE_WORKER_PREPARE_COMMAND]?.("pluginState.lookup");

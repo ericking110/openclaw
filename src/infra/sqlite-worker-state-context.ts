@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { resolveGlobalSingleton } from "../shared/global-singleton.js";
 import { withExistingOpenClawStateSchema } from "../state/openclaw-state-db-schema-policy.js";
+import type { DatabasePathIdentity } from "./sqlite-worker-identity.js";
 
 /** Resolved host facts for the canonical shared-state owner, never authority. */
 export type SqliteWorkerStateContext = {
@@ -58,7 +59,7 @@ const stateContexts = resolveGlobalSingleton(
   () =>
     new AsyncLocalStorage<
       SqliteWorkerStateContext & {
-        existingDatabase?: { databasePath: string; identity: string };
+        existingDatabase?: { databasePath: string; identity: DatabasePathIdentity };
       }
     >(),
 );
@@ -66,7 +67,7 @@ const stateContexts = resolveGlobalSingleton(
 /** Preserve factory facts across later commands without changing their captured host context. */
 export function withSqliteWorkerExistingDatabase<T>(
   databasePath: string,
-  identity: string,
+  identity: DatabasePathIdentity,
   operation: () => T,
 ): T {
   return stateContexts.run(
@@ -79,7 +80,9 @@ export function withSqliteWorkerExistingDatabase<T>(
 }
 
 /** Only cold writable opens need this factory's prior-existence constraint. */
-export function getSqliteWorkerExistingDatabaseIdentity(databasePath: string): string | undefined {
+export function getSqliteWorkerExistingDatabaseIdentity(
+  databasePath: string,
+): DatabasePathIdentity | undefined {
   const existing = stateContexts.getStore()?.existingDatabase;
   return existing?.databasePath === databasePath ? existing.identity : undefined;
 }

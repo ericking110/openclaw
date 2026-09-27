@@ -49,13 +49,13 @@ it("retires an existing-only idle actor without opening its missing database", a
   const databasePath = openOpenClawStateDatabase().path;
   await closeOpenClawStateDatabaseAsync();
   const context = captureOpenClawStateWorkerContext();
-  unlinkSync(databasePath);
   const backend = runWithSqliteWorkerStateContext(context, () =>
     openExistingSqliteWorkerBackend(undefined, {
       databasePath,
       existingIdentity: context.admission.identity.key,
     }),
   );
+  unlinkSync(databasePath);
   try {
     expect(
       runWithSqliteWorkerStateContext(context, () =>
