@@ -1062,14 +1062,10 @@ extension DashboardManager {
     private func documentBrowserStore(
         configuration: WindowConfiguration, target: DashboardGatewayTarget) -> DashboardBrowserSessionStore?
     {
-        if case let .profile(profileID) = target,
-           configuration.browserSession != nil ||
-           configuration.signedOut != nil
-        {
-            self.browserStore(profileID: profileID, currentSession: configuration.browserSession)
-        } else {
-            nil
-        }
+        guard case let .profile(profileID) = target,
+              configuration.browserSession != nil || configuration.signedOut != nil
+        else { return nil }
+        return self.browserStore(profileID: profileID, currentSession: configuration.browserSession)
     }
 
     func conversationDocument(
