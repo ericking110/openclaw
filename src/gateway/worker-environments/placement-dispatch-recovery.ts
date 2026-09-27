@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
 import { runTasksWithConcurrency } from "../../utils/run-with-concurrency.js";
 import { supportsCurrentWorkerLaunch } from "./admission.js";
+import { hasForcedWorkerEnvironmentAbandonment } from "./environment-errors.js";
 import {
   isCurrentActiveWorkerEnvironment,
   isUnavailableEnvironment,
@@ -15,7 +16,6 @@ import {
 } from "./placement-dispatch-pending-results.js";
 import { forceAbandonWorkerEnvironment } from "./placement-force-abandon.js";
 import {
-  FORCED_WORKER_ABANDONMENT_ERROR,
   placementTurnOwner,
   projectWorkerSessionTurnClaim,
   serializeWorkerSessionTurnClaim,
@@ -198,8 +198,7 @@ export function createPlacementRecoveryActions(deps: PlacementRecoveryDeps) {
             placement.state === "draining" ||
             placement.state === "reconciling") &&
           environment &&
-          environment.destroyRequestedAtMs !== null &&
-          environment.lastError === FORCED_WORKER_ABANDONMENT_ERROR &&
+          hasForcedWorkerEnvironmentAbandonment(environment) &&
           environment.ownerEpoch === placement.activeOwnerEpoch &&
           !placements.getPlacementMove(placement.sessionId)
         ) {
