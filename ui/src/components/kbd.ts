@@ -1,4 +1,8 @@
-import { html, nothing, type TemplateResult } from "lit";
+import { html, nothing, unsafeCSS, type TemplateResult } from "lit";
+import "../styles/kbd.css";
+import kbdCss from "../styles/kbd.css?inline";
+
+export const kbdStyles = unsafeCSS(kbdCss);
 import { ref, type RefOrCallback } from "lit/directives/ref.js";
 import {
   formatKeyboardShortcutParts,
@@ -25,7 +29,7 @@ function renderKey(key: string) {
   return isSymbolKey(symbol)
     ? html`<span
         class="kbd__symbol"
-        style="position:relative;display:inline-block;width:1em;height:1em;vertical-align:-0.125em"
+        style="position:relative;display:inline-block;width:1em;height:1em"
         ><span
           style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap"
           >${key}</span
@@ -40,7 +44,7 @@ function renderKey(key: string) {
 export function renderKbd(keys: string | number | readonly string[], options: KbdOptions = {}) {
   const parts = typeof keys === "string" || typeof keys === "number" ? [String(keys)] : keys;
   return html`<kbd
-    class=${options.className ?? nothing}
+    class=${`shortcut-kbd${options.className ? ` ${options.className}` : ""}`}
     style=${options.inline ? "font:inherit" : nothing}
     slot=${options.slot ?? nothing}
     aria-hidden=${options.ariaHidden ? "true" : nothing}

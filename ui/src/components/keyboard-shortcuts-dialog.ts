@@ -11,7 +11,7 @@ import {
 import { readSessionMethodAccess } from "../lib/session-method-access.ts";
 import { OpenClawLitElement } from "../lit/openclaw-element.ts";
 import { icons } from "./icons.ts";
-import { renderKeyboardShortcut } from "./kbd.ts";
+import { kbdStyles, renderKeyboardShortcut } from "./kbd.ts";
 import "./modal-dialog.ts";
 
 class KeyboardShortcutsDialog extends OpenClawLitElement {
@@ -19,114 +19,117 @@ class KeyboardShortcutsDialog extends OpenClawLitElement {
   @property({ attribute: false }) newSessionHost?: ShellNewSessionHost;
   @state() private open = false;
 
-  static override styles = css`
-    :host {
-      display: contents;
-      --openclaw-modal-width: 560px;
-    }
+  static override styles = [
+    kbdStyles,
+    css`
+      :host {
+        display: contents;
+        --openclaw-modal-width: 560px;
+      }
 
-    .dialog {
-      display: flex;
-      max-height: min(720px, calc(100dvh - 64px));
-      flex-direction: column;
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      background: var(--card);
-      color: var(--text);
-    }
+      .dialog {
+        display: flex;
+        max-height: min(720px, calc(100dvh - 64px));
+        flex-direction: column;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: var(--card);
+        color: var(--text);
+      }
 
-    .header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 20px 22px 16px;
-      border-bottom: 1px solid var(--border);
-    }
+      .header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 20px 22px 16px;
+        border-bottom: 1px solid var(--border);
+      }
 
-    h2 {
-      margin: 0;
-      color: var(--text-strong);
-      font-size: 16px;
-      font-weight: 600;
-    }
+      h2 {
+        margin: 0;
+        color: var(--text-strong);
+        font-size: 16px;
+        font-weight: 600;
+      }
 
-    .close {
-      display: grid;
-      width: 28px;
-      height: 28px;
-      place-items: center;
-      border: 0;
-      border-radius: 6px;
-      background: transparent;
-      color: var(--muted);
-    }
+      .close {
+        display: grid;
+        width: 28px;
+        height: 28px;
+        place-items: center;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--muted);
+      }
 
-    .close span {
-      display: flex;
-    }
+      .close span {
+        display: flex;
+      }
 
-    .close svg {
-      width: 16px;
-      height: 16px;
-    }
+      .close svg {
+        width: 16px;
+        height: 16px;
+      }
 
-    .close:hover {
-      background: var(--bg-hover);
-      color: var(--text);
-    }
+      .close:hover {
+        background: var(--bg-hover);
+        color: var(--text);
+      }
 
-    .body {
-      overflow: auto;
-      padding: 8px 22px 18px;
-    }
+      .body {
+        overflow: auto;
+        padding: 8px 22px 18px;
+      }
 
-    section + section {
-      margin-top: 12px;
-      border-top: 1px solid var(--border);
-    }
+      section + section {
+        margin-top: 12px;
+        border-top: 1px solid var(--border);
+      }
 
-    h3 {
-      margin: 18px 0 8px;
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-    }
+      h3 {
+        margin: 18px 0 8px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
 
-    .shortcut-row {
-      display: flex;
-      min-height: 34px;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      font-size: 13px;
-    }
+      .shortcut-row {
+        display: flex;
+        min-height: 34px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        font-size: 13px;
+      }
 
-    .combos {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
+      .combos {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
 
-    .combo {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
+      .combo {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
 
-    kbd {
-      min-width: 22px;
-      padding: 3px 6px;
-      border: 1px solid var(--border-strong);
-      border-radius: 5px;
-      background: var(--bg-muted);
-      color: var(--text);
-      font: inherit;
-      font-size: 12px;
-      text-align: center;
-    }
-  `;
+      kbd {
+        min-width: 22px;
+        padding: 3px 6px;
+        border: 1px solid var(--border-strong);
+        border-radius: 5px;
+        background: var(--bg-muted);
+        color: var(--text);
+        font: inherit;
+        font-size: 12px;
+        text-align: center;
+      }
+    `,
+  ];
 
   get isOpen(): boolean {
     return this.open;

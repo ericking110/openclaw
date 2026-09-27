@@ -9,7 +9,7 @@ import { renderCopyButton } from "./copy-button.ts";
 import { type FileKind, fileKindForPath } from "./file-kind.ts";
 import { filePreviewModalStyles } from "./file-preview-modal.styles.ts";
 import { icons } from "./icons.ts";
-import { renderKbd } from "./kbd.ts";
+import { kbdStyles, renderKbd } from "./kbd.ts";
 import { toSanitizedMarkdownHtml } from "./markdown.ts";
 import { renderPanelLoadingSkeleton } from "./panel-loading-skeleton.ts";
 import "./modal-dialog.ts";
@@ -53,7 +53,7 @@ export class OpenClawFilePreviewModal extends OpenClawLitElement {
   // Reconnection does not rerun firstUpdated; defer focus until shadow DOM is ready.
   private focusAfterUpdate = false;
 
-  static override styles = filePreviewModalStyles;
+  static override styles = [filePreviewModalStyles, kbdStyles];
 
   protected override willUpdate(changed: PropertyValues<this>) {
     const inputsChanged =

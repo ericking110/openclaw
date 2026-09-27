@@ -482,15 +482,22 @@ export function renderCommandPalette(readProps: () => CommandPaletteProps) {
                     <div id="cmd-palette-keys" class="cmd-palette__footer">
                       ${
                         items.length > 0 && !props.query.includes("\n")
-                          ? html`<span
-                                >${renderKbd(["↑", "↓"])} ${t("palette.footer.navigate")}</span
+                          ? html`<span class="cmd-palette__hint"
+                                >${renderKbd(["↑", "↓"])}${" "}<span
+                                  >${t("palette.footer.navigate")}</span
+                                ></span
                               >
-                              <span>${renderKbd("↵")} ${t("palette.footer.select")}</span>`
+                              <span class="cmd-palette__hint"
+                                >${renderKbd("↵")}${" "}<span
+                                  >${t("palette.footer.select")}</span
+                                ></span
+                              >`
                           : nothing
                       }
-                      <span
-                        >${renderKeyboardShortcut(KEYBOARD_SHORTCUT_COMBOS.newline)}
-                        ${t("palette.footer.newline")}</span
+                      <span class="cmd-palette__hint"
+                        >${renderKeyboardShortcut(KEYBOARD_SHORTCUT_COMBOS.newline)}${" "}<span
+                          >${t("palette.footer.newline")}</span
+                        ></span
                       >
                     </div>
                   `
