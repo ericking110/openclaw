@@ -66,7 +66,6 @@ private final class DashboardMessageHandler: NSObject, WKScriptMessageHandler {
 @MainActor
 final class DashboardWindowController: NSWindowController, WKNavigationDelegate, WKUIDelegate, NSWindowDelegate {
     private static let linkMessageHandlerName = "openclawLink"
-    private static let windowDragMessageHandlerName = "openclawWindowDrag"
     private static let updateMessageHandlerName = "openclawUpdate"
     private static let commandsMessageHandlerName = "openclawCommands"
 
@@ -181,7 +180,6 @@ final class DashboardWindowController: NSWindowController, WKNavigationDelegate,
         { controller in
             for name in [
                 Self.linkMessageHandlerName,
-                Self.windowDragMessageHandlerName,
                 Self.notificationsMessageHandlerName,
                 Self.gatewaysMessageHandlerName,
                 Self.commandsMessageHandlerName,
@@ -549,7 +547,6 @@ final class DashboardWindowController: NSWindowController, WKNavigationDelegate,
     fileprivate func receiveMessage(_ message: WKScriptMessage) {
         switch message.name {
         case Self.linkMessageHandlerName: self.receiveLinkMessage(message)
-        case Self.windowDragMessageHandlerName: self.receiveWindowDragMessage(message)
         case Self.updateMessageHandlerName: self.receiveUpdateMessage(message)
         case Self.commandsMessageHandlerName: self.receiveCommandsMessage(message)
         case Self.notificationsMessageHandlerName: self.receiveNotificationsMessage(message)
@@ -575,40 +572,6 @@ final class DashboardWindowController: NSWindowController, WKNavigationDelegate,
             // Older Control UI bundles still post inline; Mac tabs now use openclawBrowser.
             self.openExternal(request.url)
         }
-    }
-
-    /// The Control UI's passive chrome and the native failure page's background
-    /// ask the window to take over the in-flight mouse gesture because
-    /// WKWebView swallows titlebar-style drags.
-    private func receiveWindowDragMessage(_ message: WKScriptMessage) {
-        let isNativeFailureDocument = self.isShowingFailurePage &&
-            message.frameInfo.request.url?.absoluteString == "about:blank" &&
-            self.webView.url?.absoluteString == "about:blank"
-        guard message.name == Self.windowDragMessageHandlerName,
-              message.webView === self.webView,
-              message.frameInfo.isMainFrame,
-              isNativeFailureDocument ||
-              ControlUIDocumentHost.isTrustedLinkSource(message.frameInfo.request.url, dashboardURL: self.currentURL),
-              Self.isWindowDragRequest(message.body),
-              let window
-        else {
-            return
-        }
-        // The script message arrives async; during a press the app's current
-        // event is still the initiating left-mouse-down (or a later drag). A
-        // finished click leaves left-mouse-up here and starts no drag.
-        guard let event = NSApp.currentEvent,
-              event.type == .leftMouseDown || event.type == .leftMouseDragged,
-              event.window === window
-        else {
-            return
-        }
-        DashboardWindowDragGesture.handle(event, in: window)
-    }
-
-    static func isWindowDragRequest(_ body: Any) -> Bool {
-        guard let payload = body as? [String: Any] else { return false }
-        return payload["type"] as? String == "window-drag"
     }
 
     private func receiveUpdateMessage(_ message: WKScriptMessage) {

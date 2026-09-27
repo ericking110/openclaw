@@ -44,6 +44,19 @@ enum WebChatTracePreferences {
 /// installs toolbar items. Keep the full-window chat's titlebar merged.
 private final class WebChatWindow: ExperienceWindow {
     var pinnedTitle: String?
+    weak var webConversation: OpenClawWebConversation?
+
+    override func toggleToolbarShown(_ sender: Any?) {
+        guard self.webConversation?.ownsConversation != true else { return }
+        super.toggleToolbarShown(sender)
+    }
+
+    override func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
+        if self.webConversation?.ownsConversation == true, item.action == #selector(NSWindow.toggleToolbarShown(_:)) {
+            return false
+        }
+        return super.validateUserInterfaceItem(item)
+    }
 
     override var title: String {
         didSet {
@@ -1243,7 +1256,8 @@ final class WebChatSwiftUIWindowController: NSObject, NSWindowDelegate {
         self.window = Self.makeWindow(
             contentViewController: self.contentController,
             title: windowTitle,
-            autosaveName: windowAutosaveName)
+            autosaveName: windowAutosaveName,
+            webConversation: conversationOwner)
         self.window?.delegate = self
         self.conversationController?.onTitleChanged = { [weak self] title in
             guard let window = self?.window as? WebChatWindow else { return }
@@ -1377,7 +1391,8 @@ final class WebChatSwiftUIWindowController: NSObject, NSWindowDelegate {
     private static func makeWindow(
         contentViewController: NSViewController,
         title: String,
-        autosaveName: String) -> ExperienceWindow
+        autosaveName: String,
+        webConversation: OpenClawWebConversation?) -> ExperienceWindow
     {
         let window = WebChatWindow(
             contentRect: NSRect(origin: .zero, size: WebChatSwiftUILayout.windowSize),
@@ -1386,6 +1401,12 @@ final class WebChatSwiftUIWindowController: NSObject, NSWindowDelegate {
             defer: false)
         window.title = title
         window.pinnedTitle = title
+        window.webConversation = webConversation
+        if webConversation != nil {
+            // As in Dashboard, keep a 52pt unified titlebar even with no detail
+            // items. SwiftUI still supplies the sidebar's native controls.
+            window.toolbar = NSToolbar(identifier: "ConversationWindowTitlebar")
+        }
         window.contentViewController = contentViewController
         // Attaching an NSHostingController resets scene bridging to `.all`;
         // opt back into toolbar items only so SwiftUI cannot restore the title.

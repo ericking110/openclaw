@@ -580,10 +580,10 @@ struct DashboardWindowSmokeTests {
     }
 
     @Test func `dashboard accepts only typed window drag requests`() {
-        #expect(DashboardWindowController.isWindowDragRequest(["type": "window-drag"]))
-        #expect(!DashboardWindowController.isWindowDragRequest(["type": "open-link"]))
-        #expect(!DashboardWindowController.isWindowDragRequest(["type": 1]))
-        #expect(!DashboardWindowController.isWindowDragRequest("window-drag"))
+        #expect(ControlUIDocumentHost.isWindowDragRequest(["type": "window-drag"]))
+        #expect(!ControlUIDocumentHost.isWindowDragRequest(["type": "open-link"]))
+        #expect(!ControlUIDocumentHost.isWindowDragRequest(["type": 1]))
+        #expect(!ControlUIDocumentHost.isWindowDragRequest("window-drag"))
     }
 
     @Test func `dashboard trusts only its main control path for link messages`() throws {
@@ -689,7 +689,11 @@ extension DashboardWindowSmokeTests {
         // Keep the injected titlebar height in lockstep with the 52pt unified
         // toolbar in makeWindow(); the two must match for the traffic lights and
         // the hosted web buttons to share one vertical center.
-        #expect(chromeScript.source.contains("--openclaw-native-titlebar-height: 52px"))
+        let titlebarScript = try #require(controller._testUserScripts.first {
+            $0.source.contains("--openclaw-native-titlebar-height: 52px")
+        })
+        #expect(titlebarScript.injectionTime == .atDocumentStart)
+        #expect(titlebarScript.isForMainFrameOnly)
         #expect(!chromeScript.source.contains("max-width: 1100px"))
         #expect(chromeScript.source.contains("openclaw-native-web-chrome"))
         #expect(!chromeScript.source.contains("openclaw-native-nav"))

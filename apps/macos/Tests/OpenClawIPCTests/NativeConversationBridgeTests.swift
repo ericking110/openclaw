@@ -19,6 +19,28 @@ struct NativeConversationBridgeTests {
         #expect(ControlUIDocumentHost.appPath(fromDocumentPath: "//other.invalid/settings", baseURL: root) == nil)
     }
 
+    @Test func `conversation titlebar is available at startup only on the trusted mount`() async throws {
+        let server = try await DashboardHTTPFixture.start(
+            html: Self.html, contentSecurityPolicy: "default-src 'self' 'unsafe-inline'")
+        defer { server.stop() }
+        let document = Self.document(server: server, handler: NativeConversationMessageHandler())
+        defer { document.webView.stopLoading() }
+        for path in ["/control/chat/main", "/outside"] {
+            document.load(server.url(path))
+            try await Self.waitUntil {
+                let current = try? await document.webView.evaluateJavaScript(
+                    "window.fixtureChrome ? location.pathname : null")
+                return current as? String == path
+            }
+            let chrome = try #require(
+                try await document.webView.evaluateJavaScript("window.fixtureChrome") as? [String: Any])
+            #expect(chrome["height"] as? String == (path == "/outside" ? "" : "52px"))
+            #expect(chrome["drag"] as? Bool == true)
+            #expect(chrome["browser"] as? Bool == false)
+            #expect(chrome["dashboard"] as? Bool == false)
+        }
+    }
+
     @Test func `only the current main document can publish conversation state`() async throws {
         let server = try await DashboardHTTPFixture.start(
             html: Self.html, contentSecurityPolicy: "default-src 'self' 'unsafe-inline'")
@@ -139,7 +161,14 @@ struct NativeConversationBridgeTests {
     }
 
     private static let html = """
-    <!doctype html><html><body><script>
+    <!doctype html><html><head><script>
+    window.fixtureChrome = {
+      height: getComputedStyle(document.documentElement).getPropertyValue('--openclaw-native-titlebar-height').trim(),
+      drag: !!window.webkit.messageHandlers.openclawWindowDrag,
+      browser: !!window.webkit.messageHandlers.openclawBrowser,
+      dashboard: !!window.__OPENCLAW_NATIVE_WEB_CHROME__
+    };
+    </script></head><body><script>
     Object.defineProperty(window, '__OPENCLAW_NATIVE_CONVERSATION_DOCUMENT__', {
       value: {contract:1, documentId:crypto.randomUUID()}
     });

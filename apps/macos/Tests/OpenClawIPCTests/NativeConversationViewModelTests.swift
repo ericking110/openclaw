@@ -1,8 +1,11 @@
+import AppKit
 import Foundation
 import OpenClawKit
+import SwiftUI
 import Testing
 @testable import OpenClawChatUI
 
+@Suite(.serialized)
 @MainActor
 struct NativeConversationViewModelTests {
     @Test func `probing and web modes keep roster but never use native conversation owners`() async throws {
@@ -72,6 +75,57 @@ struct NativeConversationViewModelTests {
         #expect(await fixture.transport.readAckCount == 1)
         fixture.model.input = "native draft"
         #expect(fixture.model.canSend)
+    }
+
+    /// Rendered only in the disposable macOS runner, never on the operator desktop.
+    @Test func `web detail shares the titlebar and native fallback restores its toolbar`() async throws {
+        try await AppKitTestSupport.startApplication()
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        let detail = NSView()
+        let hosting = NSHostingController(rootView: OpenClawChatWindowShell(
+            viewModel: fixture.model,
+            detailHost: AnyView(ConversationDetailFixture(view: detail)))
+            .defaultAppStorage(fixture.defaults))
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700),
+            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
+            backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.toolbar = NSToolbar(identifier: "ConversationTitlebarFixture")
+        window.toolbarStyle = .unified
+        window.titlebarSeparatorStyle = .none
+        window.contentViewController = hosting
+        hosting.sceneBridgingOptions = [.toolbars]
+        window.makeKeyAndOrderFront(nil)
+        defer { window.close() }
+
+        for mode in [OpenClawWebConversation.Mode.native, .web, .native] {
+            fixture.model.setWebConversationMode(mode)
+            _ = try await AppKitTestSupport.waitForAccessibilityElement(
+                in: window, description: "the selected conversation layout")
+            { elements in
+                let identity = elements.first { $0.accessibilityIdentifier?() == "chat-conversation-identity" }
+                let sidebar = elements.first { $0.accessibilityIdentifier?() == "chat-new-thread" }
+                return mode == .web ? (identity == nil ? sidebar : nil) : identity
+            }
+            let elements = try await AppKitTestSupport.accessibilityElements(in: window)
+            let toolbar = try #require(elements.first { $0.accessibilityRole?() == .toolbar })
+            let controls = try await AppKitTestSupport.accessibilityElements(in: toolbar)
+            let names = controls.compactMap { AppKitTestSupport.accessibilityName(of: $0) }
+            if mode == .web {
+                #expect(!names.contains("New Thread"))
+                #expect(!names.contains("Thread"))
+                #expect(!names.contains("More"))
+                let content = try #require(window.contentView)
+                #expect(abs(detail.convert(detail.bounds, to: nil).maxY -
+                        content.convert(content.bounds, to: nil).maxY) < 1)
+            } else {
+                #expect(names.contains("Thread") || names.contains("More"))
+            }
+        }
     }
 
     @MainActor
@@ -145,4 +199,14 @@ private actor NativeConversationTestTransport: OpenClawChatTransport {
     nonisolated func events() -> AsyncStream<OpenClawChatTransportEvent> {
         AsyncStream { $0.finish() }
     }
+}
+
+private struct ConversationDetailFixture: NSViewRepresentable {
+    let view: NSView
+
+    func makeNSView(context _: Context) -> NSView {
+        self.view
+    }
+
+    func updateNSView(_: NSView, context _: Context) {}
 }

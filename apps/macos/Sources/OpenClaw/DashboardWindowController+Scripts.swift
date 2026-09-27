@@ -24,11 +24,6 @@ extension DashboardWindowController {
         // !important selectors also outrank the rules older app builds inject.
         let css = """
         \(DashboardDeviceSymbolStyle.css())
-        html.openclaw-native-macos {
-          /* Matches the 52pt unified-toolbar titlebar so the web buttons and the
-             traffic lights share one vertical center. */
-          --openclaw-native-titlebar-height: 52px;
-        }
         @media (min-width: 700px) {
           /* Both desktop navigation surfaces must clear AppKit's window controls
              and drag regions or their first interactive row becomes unreachable. */

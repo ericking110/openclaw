@@ -129,6 +129,9 @@ public struct OpenClawChatWindowShell: View {
                         .accessibilityHidden(!self.viewModel.usesWebConversation)
                 }
             }
+            // The web header owns the detail titlebar band; the sidebar keeps
+            // its native safe area and window controls.
+            .ignoresSafeArea(.container, edges: self.viewModel.usesWebConversation ? .top : [])
             .environment(\.openClawChatDesktopLayout, true)
             .environment(\.openClawChatWindowCommands, self.windowCommands)
             .navigationTitle(self.activeSessionTitle)
@@ -271,13 +274,7 @@ public struct OpenClawChatWindowShell: View {
                     self.conversationIdentity
                 }
             }
-        }
-        ToolbarItem(placement: .primaryAction) {
-            if self.viewModel.usesWebConversation {
-                Button { Task { await self.viewModel.startNewSession() } } label: {
-                    chatWindowActionLabel("New Thread", systemImage: "square.and.pencil")
-                }
-            } else {
+            ToolbarItem(placement: .primaryAction) {
                 self.sessionActionsMenu
             }
         }

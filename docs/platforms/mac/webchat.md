@@ -31,10 +31,12 @@ session for the selected agent (`main`, or `global` when `session.scope` is
 
 The full native chat window renders the connected Gateway's Control UI chat pane,
 including its header, transcript, composer, message actions, cards, and side
-panels. The sidebar, agent and session roster, Cmd-K palette, toolbar, menus,
-window management, and Gateway selection remain native. Selecting a thread in the
-sidebar or palette navigates the existing web pane without reloading it. New
-Thread creates the session through the native owner, then opens it in that pane.
+panels. Its header shares one titlebar row with the native sidebar controls;
+the conversation has no second native toolbar. The sidebar, agent and session
+roster, Cmd-K palette, menus, window management, and Gateway selection remain
+native. Selecting a thread in the sidebar or palette navigates the existing web
+pane without reloading it. **New Thread** stays in the sidebar and on Shift-Cmd-N:
+it creates the session through the native owner, then opens it in that pane.
 
 The web pane owns sending, drafts, queues, history, read acknowledgements, Find,
 and export. Pane-local keys such as Cmd-F, Return, Shift-Return, and Escape go to
