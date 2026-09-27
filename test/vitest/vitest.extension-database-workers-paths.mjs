@@ -11,6 +11,8 @@ export const databaseWorkerExtensionTestFiles = [
   "extensions/microsoft/speech-provider.test.ts",
   "extensions/discord/src/monitor/ingress.test.ts",
   "extensions/discord/src/monitor/message-handler.ingress-recovery.test.ts",
+  "extensions/discord/src/monitor/native-command.guild-guards.test.ts",
+  "extensions/discord/src/monitor/native-command.reset.test.ts",
   "extensions/feishu/src/monitor.message-handler.ingress.test.ts",
   "extensions/googlechat/src/monitor-ingress.test.ts",
   "extensions/googlechat/src/monitor.test.ts",
