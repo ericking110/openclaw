@@ -185,19 +185,6 @@ async function promptBaseUrlAndKey(params: {
   };
 }
 
-type CustomApiRetryChoice = "baseUrl" | "model" | "both";
-
-async function promptCustomApiRetryChoice(prompter: WizardPrompter): Promise<CustomApiRetryChoice> {
-  return await prompter.select({
-    message: t("wizard.customProvider.retryChoice"),
-    options: [
-      { value: "baseUrl", label: t("wizard.customProvider.changeBaseUrl") },
-      { value: "model", label: t("wizard.customProvider.changeModel") },
-      { value: "both", label: t("wizard.customProvider.changeBaseUrlAndModel") },
-    ],
-  });
-}
-
 async function promptCustomApiModelId(prompter: WizardPrompter): Promise<string> {
   return (
     await prompter.text({
@@ -212,7 +199,7 @@ async function applyCustomApiRetryChoice(params: {
   prompter: WizardPrompter;
   config: OpenClawConfig;
   secretInputMode?: SecretInputMode;
-  retryChoice: CustomApiRetryChoice;
+  retryChoice: "baseUrl" | "model" | "both";
   current: { baseUrl: string; apiKey?: SecretInput; resolvedApiKey: string; modelId: string };
 }): Promise<{ baseUrl: string; apiKey?: SecretInput; resolvedApiKey: string; modelId: string }> {
   let { baseUrl, apiKey, resolvedApiKey, modelId } = params.current;
@@ -333,7 +320,14 @@ export async function promptCustomApiConfig(params: {
         );
       }
     }
-    const retryChoice = await promptCustomApiRetryChoice(prompter);
+    const retryChoice = await prompter.select<"baseUrl" | "model" | "both">({
+      message: t("wizard.customProvider.retryChoice"),
+      options: [
+        { value: "baseUrl", label: t("wizard.customProvider.changeBaseUrl") },
+        { value: "model", label: t("wizard.customProvider.changeModel") },
+        { value: "both", label: t("wizard.customProvider.changeBaseUrlAndModel") },
+      ],
+    });
     ({ baseUrl, apiKey, resolvedApiKey, modelId } = await applyCustomApiRetryChoice({
       prompter,
       config,
