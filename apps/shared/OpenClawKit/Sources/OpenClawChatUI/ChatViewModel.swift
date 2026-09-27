@@ -1206,7 +1206,7 @@ extension OpenClawChatViewModel {
             self.onSessionChanged?(next)
         }
         if !self.isApplyingWebSession, let context = self.webConversationContext {
-            self.webConversation?.navigate?(context)
+            self.webConversation?.navigate?(context, intent == .userInitiated ? .user : .synchronization)
         }
         self.startBootstrap(sessionKey: next)
     }
@@ -1236,7 +1236,7 @@ extension OpenClawChatViewModel {
         self.sessionKey = next
         self.restoreComposerAfterSessionSwitch()
         self.onSessionChanged?(next)
-        if let context = self.webConversationContext { self.webConversation?.navigate?(context) }
+        if let context = self.webConversationContext { self.webConversation?.navigate?(context, .user) }
         self.errorText = nil
         self.startBootstrap()
     }

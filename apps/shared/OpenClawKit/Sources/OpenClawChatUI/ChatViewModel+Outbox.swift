@@ -214,11 +214,9 @@ extension OpenClawChatViewModel {
     }
 
     func reconcilePendingOutboxBranchScopes() {
-        guard !self.usesWebConversation else { return }
         guard let outbox, self.healthOK else { return }
         Task { [weak self] in
-            guard let self, let commands = await outbox.loadCommandsIfAvailable(),
-                  !self.usesWebConversation else { return }
+            guard let self, let commands = await outbox.loadCommandsIfAvailable() else { return }
             let grouped = Dictionary(grouping: commands.filter {
                 $0.status == .queued || $0.status == .sending || $0.status == .awaitingConfirmation
             }, by: Self.outboxBranchScope(for:))
@@ -640,6 +638,9 @@ extension OpenClawChatViewModel {
     /// that already carry the command's user idempotency key from an earlier
     /// restore, and refreshes their display states.
     private func presentOutboxCommands(_ commands: [OpenClawChatOutboxCommand]) {
+        // Queue custody is Gateway-wide; a web pane only retires this window's
+        // native transcript projection, not delivery for other conversations.
+        guard !self.usesWebConversation else { return }
         self.pruneOutboxMappings()
         guard !commands.isEmpty else { return }
         var next = self.messages
@@ -753,7 +754,6 @@ extension OpenClawChatViewModel {
     // MARK: - Flush
 
     func flushOutboxIfNeeded() {
-        guard !self.usesWebConversation else { return }
         guard self.outbox != nil, self.healthOK else { return }
         // Health is intentionally established before sessions.list. Replays
         // need the current connection's model/runtime metadata first.
@@ -775,20 +775,6 @@ extension OpenClawChatViewModel {
                 self.flushOutboxIfNeeded()
             }
         }
-    }
-
-    private func claimNextNativeOutboxCommand(_ outbox: any OpenClawChatCommandOutbox) async
-    -> OpenClawChatOutboxCommand? {
-        guard !self.usesWebConversation, let next = await outbox.claimNextCommand() else { return nil }
-        guard !self.usesWebConversation else {
-            _ = await outbox.markCommandQueued(
-                id: next.id,
-                attemptVersion: next.attemptVersion,
-                retryCount: next.retryCount,
-                lastError: next.lastError)
-            return nil
-        }
-        return next
     }
 
     private func performOutboxFlush() async {
@@ -835,7 +821,7 @@ extension OpenClawChatViewModel {
             return
         }
         var confirmationTargets: Set<OutboxDeliveryTarget> = []
-        flushLoop: while self.healthOK, !self.usesWebConversation {
+        flushLoop: while self.healthOK {
             let presentationGeneration = self.outboxPresentationGeneration
             let commands = await outbox.loadCommands()
             if presentationGeneration != self.outboxPresentationGeneration {
@@ -847,7 +833,7 @@ extension OpenClawChatViewModel {
                     .map(Self.deliveryTarget))
             let visibleSession = self.currentSessionSnapshot()
             self.presentOutboxCommands(commands.filter { self.commandMatchesTarget($0, session: visibleSession) })
-            guard let next = await self.claimNextNativeOutboxCommand(outbox) else { break }
+            guard let next = await outbox.claimNextCommand() else { break }
             let scope = Self.outboxBranchScope(for: next)
             guard self.reconciledOutboxBranchScopes.contains(scope) else {
                 _ = await outbox.markCommandQueued(
@@ -1238,7 +1224,6 @@ extension OpenClawChatViewModel {
     }
 
     func handleOutboxChange(_ change: OpenClawChatOutboxChange) {
-        guard !self.usesWebConversation else { return }
         // Invalidates every command snapshot that started loading before the
         // store mutation, including snapshots owned by another view model.
         self.outboxPresentationGeneration &+= 1
@@ -1257,9 +1242,10 @@ extension OpenClawChatViewModel {
             self.clearOutboxState(forCommandID: commandID)
         case let .invalidated(_, scope):
             let session = self.currentSessionSnapshot()
-            guard self.outboxBranchScope(for: session) == scope else { return }
+            guard self.usesWebConversation || self.outboxBranchScope(for: session) == scope else { return }
             self.reconciledOutboxBranchScopes.remove(scope)
             self.restoreOutboxMessages(session: session)
+            if self.usesWebConversation { self.reconcilePendingOutboxBranchScopes() }
         }
     }
 

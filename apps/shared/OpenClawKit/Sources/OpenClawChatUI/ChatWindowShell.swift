@@ -260,14 +260,16 @@ public struct OpenClawChatWindowShell: View {
 
     @ToolbarContentBuilder
     private var detailToolbar: some ToolbarContent {
-        if #available(macOS 26.0, *) {
-            ToolbarItem(placement: .principal) {
-                self.conversationIdentity
-            }
-            .sharedBackgroundVisibility(.hidden)
-        } else {
-            ToolbarItem(placement: .principal) {
-                self.conversationIdentity
+        if !self.viewModel.usesWebConversation {
+            if #available(macOS 26.0, *) {
+                ToolbarItem(placement: .principal) {
+                    self.conversationIdentity
+                }
+                .sharedBackgroundVisibility(.hidden)
+            } else {
+                ToolbarItem(placement: .principal) {
+                    self.conversationIdentity
+                }
             }
         }
         ToolbarItem(placement: .primaryAction) {
@@ -314,17 +316,6 @@ public struct OpenClawChatWindowShell: View {
     }
 
     private func conversationStatus(at date: Date) -> (title: String, symbol: String, tint: Color)? {
-        if self.viewModel.usesWebConversation {
-            guard let state = self.viewModel.webConversation?.state else {
-                return (String(localized: "Connecting…"), "network", .secondary)
-            }
-            switch state.connection {
-            case .signedOut: return (String(localized: "Sign-in needed"), "key", OpenClawChatTheme.warning)
-            case .offline, .connecting: return (String(localized: "Connecting…"), "network", .secondary)
-            case .connected:
-                return state.run.active ? (String(localized: "Working"), "circle.dotted", .secondary) : nil
-            }
-        }
         if !self.viewModel.healthOK {
             return (String(localized: "Connecting…"), "network", .secondary)
         }

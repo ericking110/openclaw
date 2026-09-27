@@ -45,6 +45,11 @@ final class NativeConversationBridge: NSObject, WKNavigationDelegate, WKUIDelega
     var onDocumentRetired: (() -> Void)?
     @ObservationIgnored private var readyTimeout: Task<Void, Never>?
     @ObservationIgnored private var pending: [String: Pending] = [:]
+    @ObservationIgnored private var shutdownRetainer: NativeConversationBridge?
+    @ObservationIgnored private var shutdownCompletions: [@MainActor () -> Void] = []
+    private var isClosing = false
+    private var hasShutDown = false
+    private var processHasTerminated = false
 
     private struct Pending {
         let command: NativeConversationCommand
@@ -63,27 +68,49 @@ final class NativeConversationBridge: NSObject, WKNavigationDelegate, WKUIDelega
     }
 
     func load(_ url: URL) {
+        guard !self.isClosing else { return }
         self.retireDocument()
         self.availability = .loading
         self.armReadyTimeout()
         self.document.load(url)
     }
 
-    func close() {
+    func close(afterShutdown completion: @escaping @MainActor () -> Void = {}) {
+        guard !self.hasShutDown else { completion()
+            return
+        }
+        self.shutdownCompletions.append(completion)
+        guard !self.isClosing else { return }
+        self.isClosing = true
+        // The window can disappear before WebKit commits the replacement. Keep the
+        // delegate and send exclusion alive until the old document cannot execute.
+        self.shutdownRetainer = self
         self.readyTimeout?.cancel()
         self.document.retirePendingLoad()
         self.document.webView.stopLoading()
-        self.document.webView.window?.makeFirstResponder(nil)
         self.retireDocument()
         self.document.webView.configuration.userContentController.removeScriptMessageHandler(
             forName: NativeConversationContract.handlerName,
             contentWorld: .page)
-        self.document.webView.navigationDelegate = nil
         self.document.webView.uiDelegate = nil
-        // A hidden fallback must not leave the retired page's socket/outbox running.
+        if self.processHasTerminated { self.didShutDown()
+            return
+        }
         self.document.webView.loadHTMLString(
             "",
             baseURL: nil)
+    }
+
+    private func didShutDown() {
+        guard self.isClosing, !self.hasShutDown else { return }
+        self.hasShutDown = true
+        self.document.webView.navigationDelegate = nil
+        let completions = self.shutdownCompletions
+        self.shutdownCompletions.removeAll()
+        for completion in completions {
+            completion()
+        }
+        self.shutdownRetainer = nil
     }
 
     private func armReadyTimeout() {
@@ -111,14 +138,17 @@ final class NativeConversationBridge: NSObject, WKNavigationDelegate, WKUIDelega
         self.pending.removeAll()
         for request in requests.values {
             request.timeout.cancel()
-            request.continuation.resume(returning: Self.failure(
+            let result = Self.failure(
                 for: request.command,
-                error: "stale-document"))
+                error: "stale-document")
+            NativeConversationTrace.result(request.command, result: result)
+            request.continuation.resume(returning: result)
         }
         self.onDocumentRetired?()
     }
 
     private func fail(_ message: String) {
+        guard !self.isClosing else { return }
         self.readyTimeout?.cancel()
         self.retireDocument()
         self.availability = .failed(message)
@@ -129,6 +159,7 @@ final class NativeConversationBridge: NSObject, WKNavigationDelegate, WKUIDelega
         _ message: WKScriptMessage,
         replyHandler: @escaping @MainActor (Any?, String?) -> Void)
     {
+        NativeConversationTrace.receive(message.body)
         guard self.isTrusted(message),
               let data = try? JSONSerialization.data(withJSONObject: message.body),
               let decoded = try? JSONDecoder().decode(
@@ -186,6 +217,7 @@ final class NativeConversationBridge: NSObject, WKNavigationDelegate, WKUIDelega
         case let .commandResult(result):
             if let request = self.pending.removeValue(forKey: result.requestId) {
                 request.timeout.cancel()
+                NativeConversationTrace.result(request.command, result: result)
                 request.continuation.resume(returning: result)
             }
         case let .routeChanged(change): self.onRouteChanged?(change)
@@ -201,7 +233,8 @@ final class NativeConversationBridge: NSObject, WKNavigationDelegate, WKUIDelega
     private func isTrusted(_ message: WKScriptMessage) -> Bool {
         let frame = message.frameInfo
         let origin = frame.securityOrigin
-        return message.name == NativeConversationContract.handlerName && message.webView === self.document.webView &&
+        return !self.isClosing && message.name == NativeConversationContract.handlerName &&
+            message.webView === self.document.webView &&
             frame.isMainFrame && self.document.hasCurrentBrowserSession &&
             ControlUIDocumentHost.isTrustedLinkSource(
                 frame.request.url,
@@ -224,17 +257,20 @@ final class NativeConversationBridge: NSObject, WKNavigationDelegate, WKUIDelega
             documentId: self.currentDocumentId ?? "",
             requestId: UUID().uuidString,
             action: action)
+        NativeConversationTrace.command(command)
         guard self.currentDocumentId != nil, self.document.hasCurrentBrowserSession,
               let script = try? command.javaScript()
         else {
-            return Self.failure(
+            let result = Self.failure(
                 for: command,
                 error: "stale-document")
+            NativeConversationTrace.result(command, result: result)
+            return result
         }
         let generation = self.document.generation
         return await withCheckedContinuation { continuation in
             let timeout = Task { @MainActor [weak self] in
-                do { try await Task.sleep(for: .seconds(30)) } catch { return }
+                do { try await Task.sleep(for: .seconds(10)) } catch { return }
                 self?.reject(
                     command.requestId,
                     error: "timeout")
@@ -263,9 +299,11 @@ final class NativeConversationBridge: NSObject, WKNavigationDelegate, WKUIDelega
     {
         guard let request = self.pending.removeValue(forKey: requestId) else { return }
         request.timeout.cancel()
-        request.continuation.resume(returning: Self.failure(
+        let result = Self.failure(
             for: request.command,
-            error: error))
+            error: error)
+        NativeConversationTrace.result(request.command, result: result)
+        request.continuation.resume(returning: result)
     }
 
     private static func failure(
@@ -280,6 +318,13 @@ final class NativeConversationBridge: NSObject, WKNavigationDelegate, WKUIDelega
 
     func webView(_ webView: WKWebView, didCommit _: WKNavigation!) {
         guard webView === self.document.webView else { return }
+        if self.isClosing {
+            if webView.url?.absoluteString == "about:blank" {
+                self.didShutDown()
+            }
+            return
+        }
+        self.processHasTerminated = false
         self.retireDocument()
         self.availability = .loading
         self.armReadyTimeout()
@@ -306,6 +351,10 @@ final class NativeConversationBridge: NSObject, WKNavigationDelegate, WKUIDelega
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         guard webView === self.document.webView else { return }
+        self.processHasTerminated = true
+        if self.isClosing { self.didShutDown()
+            return
+        }
         self.fail(String(localized: "The conversation page stopped. Reopen the window to reconnect."))
     }
 
@@ -329,6 +378,10 @@ final class NativeConversationBridge: NSObject, WKNavigationDelegate, WKUIDelega
         decidePolicyFor navigationAction: WKNavigationAction,
         decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void)
     {
+        if self.isClosing {
+            decisionHandler(navigationAction.request.url?.absoluteString == "about:blank" ? .allow : .cancel)
+            return
+        }
         self.document.decidePolicy(
             for: navigationAction,
             documentReady: self.currentDocumentId != nil,

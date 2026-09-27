@@ -7,9 +7,25 @@ import OpenClawKit
 @Observable
 public final class OpenClawWebConversation {
     public enum Mode { case probing, native, web }
+    public enum NavigationSource { case user, synchronization }
+
+    public struct InitialDraft: Sendable {
+        public let context: NativeConversationContext
+        public let text: String
+
+        public init(context: NativeConversationContext, text: String) {
+            self.context = context
+            self.text = text
+        }
+
+        public func text(for context: NativeConversationContext) -> String? {
+            self.context == context ? self.text : nil
+        }
+    }
+
     public var mode = Mode.probing
     public var state: NativeConversationState?
-    public var navigate: ((NativeConversationContext) -> Void)?
+    public var navigate: ((NativeConversationContext, NavigationSource) -> Void)?
 
     public init() {}
     public var ownsConversation: Bool {
@@ -52,7 +68,6 @@ extension OpenClawChatViewModel {
         self.advanceSessionGeneration()
         self.bootstrapTask?.cancel()
         self.cancelHistoryInvalidationRefresh()
-        self.outboxRetryTask?.cancel()
         self.clearSessionOwnedState()
         webConversation.mode = mode
         if mode != .native {
@@ -86,11 +101,17 @@ extension OpenClawChatViewModel {
     func handleWebConversationEvent(_ evt: OpenClawChatTransportEvent) {
         switch evt {
         case let .health(ok):
-            self.healthOK = ok
+            self.applyTransportHealth(ok, refreshSessionsOnReconnect: false)
             if ok { self.loadWebConversationChrome()
                 self.refreshAgentsIfRequested()
             }
-        case .chatMetadataChanged, .modelSelectionChanged, .routeChanged, .seqGap:
+        case .routeChanged, .seqGap:
+            self.invalidateSessionMetadataReadiness()
+            self.invalidateOutboxBranchReconciliation()
+            self.invalidateModelChoices()
+            self.loadWebConversationChrome()
+            self.refreshAgentsIfRequested()
+        case .chatMetadataChanged, .modelSelectionChanged:
             self.invalidateModelChoices()
             self.loadWebConversationChrome()
             self.refreshAgentsIfRequested()

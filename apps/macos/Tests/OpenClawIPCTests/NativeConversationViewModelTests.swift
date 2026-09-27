@@ -34,10 +34,15 @@ struct NativeConversationViewModelTests {
         let fixture = try Fixture()
         defer { fixture.close() }
         var destinations: [NativeConversationContext] = []
-        fixture.owner.navigate = { destinations.append($0) }
+        var sources: [OpenClawWebConversation.NavigationSource] = []
+        fixture.owner.navigate = { context, source in
+            destinations.append(context)
+            sources.append(source)
+        }
         let sidebar = NativeConversationContext(agentId: "main", sessionKey: "agent:main:sidebar")
         fixture.model.switchSession(to: sidebar.sessionKey)
         #expect(destinations == [sidebar])
+        #expect(sources == [.user])
         let fork = NativeConversationContext(agentId: "main", sessionKey: "agent:main:fork")
         fixture.model.acceptWebRoute(fork)
         #expect(fixture.model.sessionKey == fork.sessionKey)
@@ -49,6 +54,8 @@ struct NativeConversationViewModelTests {
         fixture.model.acceptWebConversation(state)
         #expect(fixture.owner.state == state)
         #expect(destinations == [sidebar])
+        fixture.model.syncSession(to: "agent:main:synchronized")
+        #expect(sources == [.user, .synchronization])
     }
 
     @Test func `unsupported conversation fallback restores native history subscription and read ownership`() async throws {

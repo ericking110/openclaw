@@ -67,6 +67,13 @@ struct NativeConversationBridgeTests {
         let outside = try await Self.post("{type:'state', ...fixtureState(1, 'Outside')}", in: document.webView)
         #expect(outside["ok"] as? Bool == false)
         #expect(bridge.state == nil)
+
+        var stopped = false
+        bridge.close { stopped = true }
+        // Initiating navigation is not proof that the old page stopped executing.
+        #expect(!stopped)
+        try await Self.waitUntil { stopped }
+        #expect(document.webView.url?.absoluteString == "about:blank")
     }
 
     @Test func `another web view is refused and command replies resolve once`() async throws {

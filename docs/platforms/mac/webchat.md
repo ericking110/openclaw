@@ -293,6 +293,11 @@ Disable the feature entirely under **Dashboard → Settings → This Mac → App
 
 ## Launch and debugging
 
+Set `OPENCLAW_DEBUG_CONVERSATION_BRIDGE=1` when launching a development build to
+log conversation bridge message types, revisions, document IDs, command request
+IDs, and outcomes through `NSLog`. This tracing is off by default and excludes
+conversation content, session names, and arbitrary web error descriptions.
+
 Run the commands below from the repository root in a POSIX shell such as `zsh`
 or `bash`, after `./scripts/package-mac-app.sh` has produced `dist/OpenClaw.app`.
 
