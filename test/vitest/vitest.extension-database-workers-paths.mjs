@@ -353,6 +353,7 @@ export const databaseWorkerExtensionTestFiles = [
   "extensions/telegram/src/bot-message-context.prompt-context.test.ts",
   "extensions/telegram/src/bot-message-dispatch.delivery-transcript.test.ts",
   "extensions/telegram/src/bot-message-dispatch.directive-delivery.test.ts",
+  "extensions/telegram/src/bot-message-dispatch.final-delivery-lifecycle.test.ts",
   "extensions/telegram/src/bot-message-dispatch.native-question.test.ts",
   "extensions/telegram/src/bot-message-dispatch.preview.telegram-http.test.ts",
   "extensions/telegram/src/bot-message-dispatch.progress-card.test.ts",
