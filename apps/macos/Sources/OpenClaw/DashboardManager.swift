@@ -1059,6 +1059,19 @@ extension DashboardManager {
         }
     }
 
+    private func documentBrowserStore(
+        configuration: WindowConfiguration, target: DashboardGatewayTarget) -> DashboardBrowserSessionStore?
+    {
+        if case let .profile(profileID) = target,
+           configuration.browserSession != nil ||
+           configuration.signedOut != nil
+        {
+            self.browserStore(profileID: profileID, currentSession: configuration.browserSession)
+        } else {
+            nil
+        }
+    }
+
     private func makeController(
         configuration: WindowConfiguration,
         target: DashboardGatewayTarget,
@@ -1067,14 +1080,7 @@ extension DashboardManager {
         reusingWindow: NSWindow? = nil) -> DashboardWindowController
     {
         let primaryLocal = !auxiliary && target == .primary && configuration.mode == .local
-        let browserStore: DashboardBrowserSessionStore? = if case let .profile(profileID) = target,
-                                                             configuration.browserSession != nil ||
-                                                             configuration.signedOut != nil
-        {
-            self.browserStore(profileID: profileID, currentSession: configuration.browserSession)
-        } else {
-            nil
-        }
+        let browserStore = self.documentBrowserStore(configuration: configuration, target: target)
         let controller = DashboardWindowController(
             url: configuration.url,
             auth: configuration.auth,

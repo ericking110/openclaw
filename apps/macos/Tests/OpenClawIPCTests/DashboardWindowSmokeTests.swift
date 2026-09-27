@@ -247,19 +247,19 @@ struct DashboardWindowSmokeTests {
     @Test func `dashboard navigation stays on same endpoint`() throws {
         let dashboard = try #require(URL(string: "http://127.0.0.1:18789/control/"))
         let staleEndpoint = try #require(URL(string: "http://127.0.0.1:18790/control/chat"))
-        #expect(try DashboardWindowController.shouldAllowNavigation(
+        #expect(try ControlUIDocumentHost.shouldAllowNavigation(
             to: #require(URL(string: "http://127.0.0.1:18789/control/chat")),
             dashboardURL: dashboard,
             isMainFrame: true))
-        #expect(try !DashboardWindowController.shouldAllowNavigation(
+        #expect(try !ControlUIDocumentHost.shouldAllowNavigation(
             to: #require(URL(string: "https://docs.openclaw.ai/")),
             dashboardURL: dashboard,
             isMainFrame: true))
-        #expect(!DashboardWindowController.shouldAllowNavigation(
+        #expect(!ControlUIDocumentHost.shouldAllowNavigation(
             to: staleEndpoint,
             dashboardURL: dashboard,
             isMainFrame: true))
-        #expect(!DashboardWindowController.shouldOpenExternalDashboardNavigation(
+        #expect(!ControlUIDocumentHost.shouldOpenExternalDashboardNavigation(
             staleEndpoint,
             navigationType: .backForward,
             buttonNumber: 1))
@@ -277,27 +277,27 @@ struct DashboardWindowSmokeTests {
         let externalHTTPFrame = try #require(URL(string: "http://clickclack.example/embed/thread/T01/M01"))
         let localFile = try #require(URL(string: "file:///tmp/discussion.html"))
 
-        #expect(DashboardWindowController.shouldAllowNavigation(
+        #expect(ControlUIDocumentHost.shouldAllowNavigation(
             to: channel, dashboardURL: dashboard, isMainFrame: false, isTrustedDashboardSource: true))
-        #expect(DashboardWindowController.shouldAllowNavigation(
+        #expect(ControlUIDocumentHost.shouldAllowNavigation(
             to: thread, dashboardURL: dashboard, isMainFrame: false, isTrustedDashboardSource: true))
-        #expect(DashboardWindowController.shouldAllowNavigation(
+        #expect(ControlUIDocumentHost.shouldAllowNavigation(
             to: hostnameAlias, dashboardURL: dashboard, isMainFrame: false, isTrustedDashboardSource: true))
-        #expect(DashboardWindowController.shouldAllowNavigation(
+        #expect(ControlUIDocumentHost.shouldAllowNavigation(
             to: ipv6Alias, dashboardURL: dashboard, isMainFrame: false, isTrustedDashboardSource: true))
-        #expect(DashboardWindowController.shouldAllowNavigation(
+        #expect(ControlUIDocumentHost.shouldAllowNavigation(
             to: externalFrame, dashboardURL: dashboard, isMainFrame: false, isTrustedDashboardSource: true))
-        #expect(DashboardWindowController.shouldAllowNavigation(
+        #expect(ControlUIDocumentHost.shouldAllowNavigation(
             to: externalHTTPFrame, dashboardURL: dashboard, isMainFrame: false, isTrustedDashboardSource: true))
-        #expect(!DashboardWindowController.shouldAllowNavigation(
+        #expect(!ControlUIDocumentHost.shouldAllowNavigation(
             to: channel, dashboardURL: dashboard, isMainFrame: true))
-        #expect(!DashboardWindowController.shouldAllowNavigation(
+        #expect(!ControlUIDocumentHost.shouldAllowNavigation(
             to: credentialedFrame, dashboardURL: dashboard, isMainFrame: false, isTrustedDashboardSource: true))
-        #expect(!DashboardWindowController.shouldAllowNavigation(
+        #expect(!ControlUIDocumentHost.shouldAllowNavigation(
             to: unrelatedPath, dashboardURL: dashboard, isMainFrame: false, isTrustedDashboardSource: true))
-        #expect(!DashboardWindowController.shouldAllowNavigation(
+        #expect(!ControlUIDocumentHost.shouldAllowNavigation(
             to: externalFrame, dashboardURL: dashboard, isMainFrame: false, isTrustedDashboardSource: false))
-        #expect(!DashboardWindowController.shouldAllowNavigation(
+        #expect(!ControlUIDocumentHost.shouldAllowNavigation(
             to: localFile, dashboardURL: dashboard, isMainFrame: false, isTrustedDashboardSource: true))
     }
 
@@ -591,19 +591,19 @@ struct DashboardWindowSmokeTests {
         let trusted = try #require(URL(string: "http://127.0.0.1:18789/control/chat"))
         let wrongPath = try #require(URL(string: "http://127.0.0.1:18789/control-room"))
         let wrongPort = try #require(URL(string: "http://127.0.0.1:18790/control/"))
-        #expect(DashboardWindowController.isTrustedLinkSource(trusted, dashboardURL: dashboard))
-        #expect(!DashboardWindowController.isTrustedLinkSource(wrongPath, dashboardURL: dashboard))
-        #expect(!DashboardWindowController.isTrustedLinkSource(wrongPort, dashboardURL: dashboard))
-        #expect(!DashboardWindowController.isTrustedLinkSource(nil, dashboardURL: dashboard))
-        #expect(DashboardWindowController.shouldAllowEditorURLLaunch(
+        #expect(ControlUIDocumentHost.isTrustedLinkSource(trusted, dashboardURL: dashboard))
+        #expect(!ControlUIDocumentHost.isTrustedLinkSource(wrongPath, dashboardURL: dashboard))
+        #expect(!ControlUIDocumentHost.isTrustedLinkSource(wrongPort, dashboardURL: dashboard))
+        #expect(!ControlUIDocumentHost.isTrustedLinkSource(nil, dashboardURL: dashboard))
+        #expect(ControlUIDocumentHost.shouldAllowEditorURLLaunch(
             from: trusted,
             isMainFrame: true,
             dashboardURL: dashboard))
-        #expect(!DashboardWindowController.shouldAllowEditorURLLaunch(
+        #expect(!ControlUIDocumentHost.shouldAllowEditorURLLaunch(
             from: wrongPath,
             isMainFrame: true,
             dashboardURL: dashboard))
-        #expect(!DashboardWindowController.shouldAllowEditorURLLaunch(
+        #expect(!ControlUIDocumentHost.shouldAllowEditorURLLaunch(
             from: trusted,
             isMainFrame: false,
             dashboardURL: dashboard))
@@ -614,46 +614,46 @@ extension DashboardWindowSmokeTests {
     @Test func `external pointer fallback rejects synthetic link activation`() throws {
         let webURL = try #require(URL(string: "https://docs.openclaw.ai/"))
         let mailURL = try #require(URL(string: "mailto:hello@example.com"))
-        #expect(DashboardWindowController.shouldOpenExternalDashboardNavigation(
+        #expect(ControlUIDocumentHost.shouldOpenExternalDashboardNavigation(
             webURL,
             navigationType: .linkActivated,
             buttonNumber: 1))
-        #expect(DashboardWindowController.shouldOpenExternalDashboardNavigation(
+        #expect(ControlUIDocumentHost.shouldOpenExternalDashboardNavigation(
             mailURL,
             navigationType: .linkActivated,
             buttonNumber: 1))
-        #expect(!DashboardWindowController.shouldOpenExternalDashboardNavigation(
+        #expect(!ControlUIDocumentHost.shouldOpenExternalDashboardNavigation(
             webURL,
             navigationType: .linkActivated,
             buttonNumber: 0))
-        #expect(!DashboardWindowController.shouldOpenExternalDashboardNavigation(
+        #expect(!ControlUIDocumentHost.shouldOpenExternalDashboardNavigation(
             mailURL,
             navigationType: .other,
             buttonNumber: 1))
 
-        #expect(DashboardWindowController.targetlessNavigationAction(
+        #expect(ControlUIDocumentHost.targetlessNavigationAction(
             for: webURL,
             navigationType: .linkActivated,
             buttonNumber: 1,
             allowEditorURLs: false) == .allow)
-        #expect(DashboardWindowController.targetlessNavigationAction(
+        #expect(ControlUIDocumentHost.targetlessNavigationAction(
             for: mailURL,
             navigationType: .linkActivated,
             buttonNumber: 1,
             allowEditorURLs: false) == .openExternal)
-        #expect(DashboardWindowController.targetlessNavigationAction(
+        #expect(ControlUIDocumentHost.targetlessNavigationAction(
             for: mailURL,
             navigationType: .linkActivated,
             buttonNumber: 0,
             allowEditorURLs: false) == .cancel)
 
         let editorURL = try #require(URL(string: "vscode://file/workspace/src/foo.ts"))
-        #expect(DashboardWindowController.targetlessNavigationAction(
+        #expect(ControlUIDocumentHost.targetlessNavigationAction(
             for: editorURL,
             navigationType: .other,
             buttonNumber: 0,
             allowEditorURLs: true) == .openExternal)
-        #expect(DashboardWindowController.targetlessNavigationAction(
+        #expect(ControlUIDocumentHost.targetlessNavigationAction(
             for: editorURL,
             navigationType: .other,
             buttonNumber: 0,
@@ -662,7 +662,7 @@ extension DashboardWindowSmokeTests {
 
     @Test func `dashboard origin brackets ipv6 literals`() throws {
         let url = try #require(URL(string: "http://[fd12:3456:789a::1]:18789/control/"))
-        #expect(DashboardWindowController.originString(for: url) == "http://[fd12:3456:789a::1]:18789")
+        #expect(ControlUIDocumentHost.originString(for: url) == "http://[fd12:3456:789a::1]:18789")
     }
 
     @Test func `dashboard native chrome clears both desktop sidebars`() async throws {
