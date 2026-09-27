@@ -10,6 +10,14 @@ enum DashboardBrowserResponseAction: Equatable {
 }
 
 extension ControlUIDocumentHost {
+    static func appPath(fromDocumentPath path: String, baseURL: URL) -> String? {
+        guard DashboardRouteMap.isValidSameAppPath(path) else { return nil }
+        let mount = self.allowedPath(for: baseURL)
+        guard mount != "/" else { return path }
+        guard path.hasPrefix(mount) else { return nil }
+        return "/" + path.dropFirst(mount.count)
+    }
+
     static func isTrustedLinkSource(_ sourceURL: URL?, dashboardURL: URL) -> Bool {
         guard let sourceURL, sameOrigin(sourceURL, dashboardURL) else { return false }
         let allowedPath = Self.allowedPath(for: dashboardURL)

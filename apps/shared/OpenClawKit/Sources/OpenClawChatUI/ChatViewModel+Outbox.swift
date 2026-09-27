@@ -214,9 +214,11 @@ extension OpenClawChatViewModel {
     }
 
     func reconcilePendingOutboxBranchScopes() {
+        guard !self.usesWebConversation else { return }
         guard let outbox, self.healthOK else { return }
         Task { [weak self] in
-            guard let self, let commands = await outbox.loadCommandsIfAvailable() else { return }
+            guard let self, let commands = await outbox.loadCommandsIfAvailable(),
+                  !self.usesWebConversation else { return }
             let grouped = Dictionary(grouping: commands.filter {
                 $0.status == .queued || $0.status == .sending || $0.status == .awaitingConfirmation
             }, by: Self.outboxBranchScope(for:))
@@ -535,6 +537,7 @@ extension OpenClawChatViewModel {
     /// Re-adopts or re-appends queued bubbles for the visible session after
     /// cold open, session switches, and wholesale history replacement.
     func restoreOutboxMessages(session: SessionSnapshot) {
+        guard !self.usesWebConversation else { return }
         guard let outbox else { return }
         Task { [weak self] in
             guard let self else { return }
@@ -750,6 +753,7 @@ extension OpenClawChatViewModel {
     // MARK: - Flush
 
     func flushOutboxIfNeeded() {
+        guard !self.usesWebConversation else { return }
         guard self.outbox != nil, self.healthOK else { return }
         // Health is intentionally established before sessions.list. Replays
         // need the current connection's model/runtime metadata first.
@@ -771,6 +775,20 @@ extension OpenClawChatViewModel {
                 self.flushOutboxIfNeeded()
             }
         }
+    }
+
+    private func claimNextNativeOutboxCommand(_ outbox: any OpenClawChatCommandOutbox) async
+    -> OpenClawChatOutboxCommand? {
+        guard !self.usesWebConversation, let next = await outbox.claimNextCommand() else { return nil }
+        guard !self.usesWebConversation else {
+            _ = await outbox.markCommandQueued(
+                id: next.id,
+                attemptVersion: next.attemptVersion,
+                retryCount: next.retryCount,
+                lastError: next.lastError)
+            return nil
+        }
+        return next
     }
 
     private func performOutboxFlush() async {
@@ -817,7 +835,7 @@ extension OpenClawChatViewModel {
             return
         }
         var confirmationTargets: Set<OutboxDeliveryTarget> = []
-        flushLoop: while self.healthOK {
+        flushLoop: while self.healthOK, !self.usesWebConversation {
             let presentationGeneration = self.outboxPresentationGeneration
             let commands = await outbox.loadCommands()
             if presentationGeneration != self.outboxPresentationGeneration {
@@ -829,7 +847,7 @@ extension OpenClawChatViewModel {
                     .map(Self.deliveryTarget))
             let visibleSession = self.currentSessionSnapshot()
             self.presentOutboxCommands(commands.filter { self.commandMatchesTarget($0, session: visibleSession) })
-            guard let next = await outbox.claimNextCommand() else { break }
+            guard let next = await self.claimNextNativeOutboxCommand(outbox) else { break }
             let scope = Self.outboxBranchScope(for: next)
             guard self.reconciledOutboxBranchScopes.contains(scope) else {
                 _ = await outbox.markCommandQueued(
@@ -1220,6 +1238,7 @@ extension OpenClawChatViewModel {
     }
 
     func handleOutboxChange(_ change: OpenClawChatOutboxChange) {
+        guard !self.usesWebConversation else { return }
         // Invalidates every command snapshot that started loading before the
         // store mutation, including snapshots owned by another view model.
         self.outboxPresentationGeneration &+= 1

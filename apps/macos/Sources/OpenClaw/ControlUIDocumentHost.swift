@@ -11,6 +11,7 @@ final class ControlUIDocumentHost {
     var auth: DashboardWindowAuth
     let tlsParams: GatewayTLSParams?
     let browserSessionLease: DashboardBrowserSessionStore.Lease?
+    private(set) var generation: UInt64 = 0
     var sourceID = UUID().uuidString
     var hasLiveContent = false
     var isShowingFailurePage = false
@@ -105,6 +106,7 @@ final class ControlUIDocumentHost {
     }
 
     func retireDocument() {
+        self.generation &+= 1
         self.sourceID = UUID().uuidString
         self.hasLiveContent = false
     }

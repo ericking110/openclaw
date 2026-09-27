@@ -12,6 +12,12 @@ private let gatewayConnectionLogger = Logger(subsystem: "ai.openclaw", category:
 /// Owns one Gateway websocket shared by its callers. The primary app runtime
 /// uses `.shared`; saved-profile windows use independent connections.
 actor GatewayConnection: Observable {
+    nonisolated let chatSendOwnership = OpenClawChatSendOwnership()
+    var nativeChatSubscriptionOwners: [UUID: OpenClawChatSessionTarget] = [:]
+    var nativeChatSubscribedScopes: Set<OpenClawChatSendOwnership.Scope> = []
+    var nativeChatSubscriptionLease: ServerLease?
+    var nativeChatSubscriptionTail: Task<Void, Error>?
+
     static let shared: GatewayConnection = {
         #if DEBUG
         // Rendered test views can request previews through the shared connection.
@@ -1656,6 +1662,16 @@ extension GatewayConnection {
         return try self.decoder.decode(OpenClawChatHistoryPayload.self, from: data)
     }
 
+    func conversationOwnershipScope(sessionKey: String, agentID: String?) -> OpenClawChatSendOwnership.Scope {
+        let defaults = self.lastSnapshot?.snapshot.sessiondefaults
+        return OpenClawChatSendOwnership.Scope(
+            sessionKey: sessionKey,
+            agentID: agentID,
+            scope: defaults?["scope"]?.value as? String,
+            mainKey: defaults?["mainKey"]?.value as? String,
+            defaultAgentID: defaults?["defaultAgentId"]?.value as? String)
+    }
+
     func chatSend(
         sessionKey: String,
         agentID: String? = nil,
@@ -1670,6 +1686,9 @@ extension GatewayConnection {
         ifCurrentRoute route: Route? = nil,
         distinguishPreDispatchRouteChange: Bool = false) async throws -> OpenClawChatSendResponse
     {
+        let ownershipScope = self.conversationOwnershipScope(sessionKey: sessionKey, agentID: agentID)
+        guard self.chatSendOwnership.beginNative(ownershipScope) else { throw OpenClawChatSendOwnershipError.webOwned }
+        defer { self.chatSendOwnership.endNative(ownershipScope) }
         let supportsSettingsCAS = if let route {
             await self.supportsServerCapability(
                 .sessionSettingsCAS,

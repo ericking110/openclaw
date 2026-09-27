@@ -1072,6 +1072,24 @@ extension DashboardManager {
         }
     }
 
+    func conversationDocument(
+        for target: DashboardGatewayTarget,
+        installCapabilities: (WKUserContentController, URL) -> Void) async throws -> ControlUIDocumentHost
+    {
+        let (configuration, _) = try await self.windowConfiguration(for: target)
+        if configuration.signedOut != nil { throw GatewayBrowserSessionError.expired }
+        let store = self.documentBrowserStore(configuration: configuration, target: target)
+        return ControlUIDocumentHost(
+            url: configuration.url,
+            auth: configuration.auth,
+            websiteDataStore: store?.dataStore ?? self.websiteDataStore,
+            tlsParams: configuration.tlsParams,
+            browserSessionLease: store?.lease(for: configuration.browserSession))
+        {
+            installCapabilities($0, configuration.url)
+        }
+    }
+
     private func makeController(
         configuration: WindowConfiguration,
         target: DashboardGatewayTarget,

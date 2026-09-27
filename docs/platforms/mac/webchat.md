@@ -8,7 +8,7 @@ title: "WebChat (macOS)"
 ---
 
 The macOS app uses the **Web** experience by default, embedding the Gateway's
-[Control UI](/web/control-ui) in an app window. To use native SwiftUI chat,
+[Control UI](/web/control-ui) in an app window. To use the native window and sessions sidebar,
 open **Dashboard → Settings → This Mac → App** and enable **Native experience
 (Experimental)**. Turn it off to return to Web.
 
@@ -26,6 +26,31 @@ are not copied to a different Gateway, account, or recreated SSH tunnel address.
 The native chat features below connect to the Gateway and default to the primary
 session for the selected agent (`main`, or `global` when `session.scope` is
 `global`). Quick Chat remains a native floating composer in either experience.
+
+## Conversation in the native window
+
+The full native chat window renders the connected Gateway's Control UI chat pane,
+including its header, transcript, composer, message actions, cards, and side
+panels. The sidebar, agent and session roster, Cmd-K palette, toolbar, menus,
+window management, and Gateway selection remain native. Selecting a thread in the
+sidebar or palette navigates the existing web pane without reloading it. New
+Thread creates the session through the native owner, then opens it in that pane.
+
+The web pane owns sending, drafts, queues, history, read acknowledgements, Find,
+and export. Pane-local keys such as Cmd-F, Return, Shift-Return, and Escape go to
+the web view. Links to settings and other pages open the Dashboard for the same
+Gateway while the conversation stays in place.
+
+The app reveals the web pane only after the current document reports support.
+An older Gateway UI, a readiness timeout, or a load failure selects the existing
+Swift chat view. Authentication, TLS, and network failures remain visible errors.
+Pending native outbox work keeps its Swift owner until it drains; items are never
+copied into web storage. Quick Chat and iOS keep the Swift chat UI.
+
+For comparison, enable **Use native conversation view** in the developer-only
+**Debug** tab, then open a new chat window. The Swift rendering details below apply
+to that mode, the fallback, and Quick Chat. The web conversation follows the
+Gateway's Control UI presentation.
 
 The full native chat window is a split view:
 
