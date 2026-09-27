@@ -19,6 +19,7 @@ final class NativeConversationController {
     private var ownershipID = UUID()
     private var ownedScopes: Set<OpenClawChatSendOwnership.Scope> = []
     @ObservationIgnored private var navigating = false
+    @ObservationIgnored private let webRoutes = OpenClawWebConversation.RouteReconciliation()
     private var isClosed = false
     private var didFallBack = false
     private var isRetiringDocument = false
@@ -138,33 +139,20 @@ final class NativeConversationController {
             }
         }
         bridge.onState = { [weak self, weak bridge] state in
-            let documentID = bridge?.currentDocumentId
-            let navigationGeneration = self?.navigationGeneration
-            Task { @MainActor [weak self, weak bridge] in
-                guard let self, let bridge, !self.isClosed, self.bridge === bridge,
-                      bridge.currentDocumentId == documentID, bridge.state?.revision == state.revision,
-                      self.navigationGeneration == navigationGeneration,
-                      !self.navigating, self.owner.ownsConversation else { return }
-                if !self.viewModel.matchesWebConversationContext(state.context) {
-                    self.adoptWebRoute(state.context)
-                } else {
-                    self.viewModel.acceptWebConversation(state)
-                    self.onTitleChanged?(state.title)
-                }
-            }
+            guard let self, let bridge, self.bridge === bridge else { return }
+            self.webRoutes.report(state.context)
+            self.scheduleWebReconciliation(bridge)
         }
         bridge.onRouteChanged = { [weak self, weak bridge] change in
-            let documentID = bridge?.currentDocumentId
-            let navigationGeneration = self?.navigationGeneration
-            Task { @MainActor [weak self, weak bridge] in
-                guard let self, let bridge, !self.isClosed, self.bridge === bridge,
-                      bridge.currentDocumentId == documentID, self.navigationGeneration == navigationGeneration,
-                      !self.navigating else { return }
-                self.adoptWebRoute(.init(agentId: change.agentId, sessionKey: change.sessionKey))
-            }
+            guard let self, let bridge, self.bridge === bridge else { return }
+            self.webRoutes.report(.init(agentId: change.agentId, sessionKey: change.sessionKey))
+            self.scheduleWebReconciliation(bridge)
         }
         bridge.onOpenDashboard = { [weak self] route in self?.openDashboard(route) ?? false }
-        bridge.onDocumentRetired = { [weak self] in self?.owner.state = nil }
+        bridge.onDocumentRetired = { [weak self] in
+            self?.webRoutes.reset()
+            self?.owner.state = nil
+        }
         bridge.onUnavailable = { [weak self] availability in
             guard let self else { return }
             if case let .failed(message) = availability {
@@ -240,6 +228,7 @@ final class NativeConversationController {
         source: OpenClawWebConversation.NavigationSource)
     {
         guard !self.isClosed, !self.didFallBack else { return }
+        self.webRoutes.reset()
         self.navigationGeneration &+= 1
         self.navigating = true
         let generation = self.navigationGeneration
@@ -255,32 +244,69 @@ final class NativeConversationController {
                 self.start()
                 return
             }
-            await self.transition(to: context, notifyWeb: true, source: source, generation: generation)
+            self.error = nil
+            await self.transition(to: context, source: source, generation: generation)
         }
     }
 
-    private func adoptWebRoute(_ context: NativeConversationContext) {
-        guard self.owner.ownsConversation else { return }
-        self.navigationGeneration &+= 1
-        self.navigating = true
-        let generation = self.navigationGeneration
-        Task { @MainActor [weak self] in
-            guard let self, !self.isClosed, generation == self.navigationGeneration else { return }
+    private func scheduleWebReconciliation(_ bridge: NativeConversationBridge) {
+        let documentID = bridge.currentDocumentId
+        Task { @MainActor [weak self, weak bridge] in
+            guard let self, let bridge, let documentID, !self.isClosed, !self.navigating,
+                  self.owner.ownsConversation, self.webRoutes.latestContext != nil,
+                  self.bridge === bridge, bridge.currentDocumentId == documentID else { return }
+            self.navigationGeneration &+= 1
+            self.navigating = true
+            let generation = self.navigationGeneration
+            let outcome = await self.reconcileWebRoute(bridge, documentID: documentID, generation: generation)
+            guard !self.isClosed, self.bridge === bridge, bridge.currentDocumentId == documentID,
+                  self.navigationGeneration == generation else { return }
+            self.finishWebReconciliation(outcome)
+        }
+    }
+
+    private func reconcileWebRoute(
+        _ bridge: NativeConversationBridge,
+        documentID: String,
+        generation: UInt64) async -> OpenClawWebConversation.RouteReconciliation.Outcome
+    {
+        let isCurrent = {
+            !self.isClosed && self.owner.ownsConversation && self.bridge === bridge &&
+                self.navigationGeneration == generation && bridge.currentDocumentId == documentID &&
+                bridge.document.hasCurrentBrowserSession
+        }
+        return await self.webRoutes.reconcile(
+            isCurrent: isCurrent,
+            reserve: { context in
+                await self.reserveSession(context) {
+                    isCurrent() && self.webRoutes.latestContext == context
+                }
+            },
+            select: { context in
+                self.viewModel.acceptWebRoute(context)
+                if let state = bridge.state, self.viewModel.matchesWebConversationContext(state.context) {
+                    self.viewModel.acceptWebConversation(state)
+                    self.onTitleChanged?(state.title)
+                }
+            })
+    }
+
+    private func finishWebReconciliation(_ outcome: OpenClawWebConversation.RouteReconciliation.Outcome) {
+        self.navigating = false
+        if case let .unavailable(context) = outcome {
             self.viewModel.acceptWebRoute(context)
-            await self.transition(to: context, notifyWeb: false, source: .synchronization, generation: generation)
+            self.fallBackToNative(error: self.error, reconsiderAfterDrain: true)
         }
     }
 
     private func transition(
         to context: NativeConversationContext,
-        notifyWeb: Bool,
         source: OpenClawWebConversation.NavigationSource,
         generation: UInt64) async
     {
         guard let bridge, let documentID = bridge.currentDocumentId else { return }
         let window = bridge.document.webView.window
         let initiatingResponder = window?.firstResponder
-        self.error = nil
         self.navigating = true
         let reserved = await self.reserveCurrentSession()
         guard !self.isClosed, generation == self.navigationGeneration,
@@ -291,25 +317,22 @@ final class NativeConversationController {
             return
         }
         self.viewModel.setWebConversationMode(.web)
-        let result = notifyWeb
-            ? await bridge.request(.navigate(context))
-            : NativeConversationResult(requestId: "", ok: true)
+        let result = await bridge.request(.navigate(context))
         guard !self.isClosed, generation == self.navigationGeneration,
               self.bridge === bridge, bridge.currentDocumentId == documentID else { return }
-        self.navigating = false
-        if let state = bridge.state ?? self.owner.state,
-           !result.ok || self.viewModel.matchesWebConversationContext(state.context)
-        {
-            // A failed command may have left the old route intact or published a
-            // newer settled route. The pane's state is the selection authority.
-            self.viewModel.acceptWebConversation(state)
-            self.onTitleChanged?(state.title)
-        }
         if !result.ok {
             self.error = String(localized:
                 "Could not open this conversation. Select another thread or reopen the window.")
-        } else if source == .user, window?.isKeyWindow == true,
-                  window?.firstResponder === initiatingResponder
+            if self.webRoutes.latestContext == nil, let state = bridge.state ?? self.owner.state {
+                self.webRoutes.report(state.context)
+            }
+        }
+        let outcome = await self.reconcileWebRoute(bridge, documentID: documentID, generation: generation)
+        guard !self.isClosed, self.navigationGeneration == generation,
+              self.bridge === bridge, bridge.currentDocumentId == documentID else { return }
+        self.finishWebReconciliation(outcome)
+        if result.ok, source == .user, self.viewModel.matchesWebConversationContext(context),
+           window?.isKeyWindow == true, window?.firstResponder === initiatingResponder
         {
             self.focusComposer()
         }
@@ -363,13 +386,19 @@ final class NativeConversationController {
 
     private func reserveCurrentSession() async -> Bool {
         guard let context = self.viewModel.webConversationContext else { return false }
+        return await self.reserveSession(context) { self.viewModel.webConversationContext == context }
+    }
+
+    private func reserveSession(
+        _ context: NativeConversationContext,
+        isCurrent: () -> Bool) async -> Bool
+    {
         let owner = self.ownershipID
         let scope = await self.connection.conversationOwnershipScope(
             sessionKey: context.sessionKey,
             agentID: context.agentId)
         guard !self.isClosed, !self.didFallBack, self.ownershipID == owner,
-              self.viewModel.webConversationContext == context,
-              !self.nativeInputIsBusy else { return false }
+              isCurrent(), !self.nativeInputIsBusy else { return false }
         if self.ownedScopes.contains(scope) { return true }
         let ownership = self.connection.chatSendOwnership
         // Each awaiting attempt owns its own claim. A stale completion must not
@@ -388,8 +417,7 @@ final class NativeConversationController {
         guard accepted else { return false }
         defer { ownership.endWeb(scope, owner: reservation) }
         guard !self.isClosed, !self.didFallBack, self.ownershipID == owner,
-              self.viewModel.webConversationContext == context,
-              !self.nativeInputIsBusy else { return false }
+              isCurrent(), !self.nativeInputIsBusy else { return false }
         // The temporary claim keeps native admission closed across this transfer.
         guard ownership.beginWeb(scope, owner: owner) else { return false }
         self.ownedScopes.insert(scope)
@@ -397,6 +425,7 @@ final class NativeConversationController {
     }
 
     private func retireBridge(afterShutdown completion: @escaping @MainActor () -> Void = {}) {
+        self.webRoutes.reset()
         let scopes = self.ownedScopes
         self.ownedScopes.removeAll()
         let ownership = self.connection.chatSendOwnership

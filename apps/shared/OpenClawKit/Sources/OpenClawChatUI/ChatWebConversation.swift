@@ -23,6 +23,51 @@ public final class OpenClawWebConversation {
         }
     }
 
+    @MainActor
+    public final class RouteReconciliation {
+        public enum Outcome: Equatable, Sendable {
+            case selected(NativeConversationContext)
+            case unavailable(NativeConversationContext)
+            case stale
+        }
+
+        public private(set) var latestContext: NativeConversationContext?
+        private var revision: UInt64 = 0
+
+        public init() {}
+
+        public func report(_ context: NativeConversationContext) {
+            guard context != self.latestContext else { return }
+            self.latestContext = context
+            self.revision &+= 1
+        }
+
+        public func reset() {
+            self.latestContext = nil
+            self.revision &+= 1
+        }
+
+        public func reconcile(
+            isCurrent: () -> Bool,
+            reserve: (NativeConversationContext) async -> Bool,
+            select: (NativeConversationContext) -> Void) async -> Outcome
+        {
+            while let context = self.latestContext {
+                guard isCurrent() else { return .stale }
+                let revision = self.revision
+                let reserved = await reserve(context)
+                guard isCurrent() else { return .stale }
+                // A newer web route supersedes both success and failure of an
+                // awaited reservation. Only the latest admitted route is selected.
+                guard self.revision == revision else { continue }
+                guard reserved else { return .unavailable(context) }
+                select(context)
+                return .selected(context)
+            }
+            return .stale
+        }
+    }
+
     public var mode = Mode.probing
     public var state: NativeConversationState?
     public var navigate: ((NativeConversationContext, NavigationSource) -> Void)?
