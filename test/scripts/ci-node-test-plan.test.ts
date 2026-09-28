@@ -2599,12 +2599,12 @@ describe("scripts/lib/ci-node-test-plan.mts", () => {
   });
 
   it.each([
-    { profile: "blacksmith", legacy: 116, measured: 310, defaultSeconds: 25 },
-    { profile: "github", legacy: 186, measured: 370, defaultSeconds: 40 },
-    { profile: "hybrid", legacy: 101, measured: 310, defaultSeconds: 22 },
+    { profile: "blacksmith", legacy: 116, measured: 310, defaultSeconds: 25, preparation: 60 },
+    { profile: "github", legacy: 186, measured: 370, defaultSeconds: 40, preparation: 96 },
+    { profile: "hybrid", legacy: 101, measured: 310, defaultSeconds: 22, preparation: 60 },
   ])(
     "prefers $profile measurements while retaining unmeasured hints and defaults",
-    ({ profile, legacy, measured, defaultSeconds }) => {
+    ({ profile, legacy, measured, defaultSeconds, preparation }) => {
       const timings = vi.spyOn(testTimings, "readCompactGroupTimings").mockReturnValue({});
       const options = {
         includeReleaseOnlyPluginShards: false,
@@ -2616,7 +2616,8 @@ describe("scripts/lib/ci-node-test-plan.mts", () => {
         plan.find((shard) =>
           shard.groups.some((group) => group.shard_name === "core-runtime-tui-pty"),
         );
-      expect(tuiJob(fallback)?.predictedSeconds).toBe(legacy);
+      expect(tuiJob(fallback)?.pretestBuildMode).toBe("runtime");
+      expect(tuiJob(fallback)?.predictedSeconds).toBe(legacy + preparation);
       timings.mockImplementation((runner) => ({
         "core-runtime-tui-pty": runner === "blacksmith" ? 310 : 370,
         "removed-test-group": 999,
@@ -2625,7 +2626,7 @@ describe("scripts/lib/ci-node-test-plan.mts", () => {
       expect(tuiJob(updated)?.groups.map((group) => group.shard_name)).toEqual([
         "core-runtime-tui-pty",
       ]);
-      expect(tuiJob(updated)?.predictedSeconds).toBe(measured);
+      expect(tuiJob(updated)?.predictedSeconds).toBe(measured + preparation);
       expect(
         updated.find((shard) =>
           shard.groups.some((group) => group.shard_name === "core-support-boundary"),
