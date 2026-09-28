@@ -74,17 +74,27 @@ export function createPlacementTurnClaimWorkerOps(runtime: { path: string; now?:
               },
             },
           }
-        : {
-            type: input.type,
-            input: {
-              nowMs: input.input.nowMs,
-              claim: { ...claim, placementGeneration: input.input.claim.placementGeneration },
-            },
-          };
+        : input.type === "placementTurns.handoffRuntimeRefreshResult"
+          ? {
+              type: input.type,
+              input: {
+                nowMs: input.input.nowMs,
+                claim: { ...claim, placementGeneration: input.input.claim.placementGeneration },
+                expectedGeneration: input.input.expectedGeneration,
+                gatewayInstanceId: input.input.gatewayInstanceId,
+              },
+            }
+          : {
+              type: input.type,
+              input: {
+                nowMs: input.input.nowMs,
+                claim: { ...claim, placementGeneration: input.input.claim.placementGeneration },
+              },
+            };
     const close =
-      command.type === "placementTurns.claim"
-        ? undefined
-        : prepareWorkerTurnClaimClosed(runtime.path, command.input.claim);
+      command.type === "placementTurns.release" || command.type === "placementTurns.releaseIfOwned"
+        ? prepareWorkerTurnClaimClosed(runtime.path, command.input.claim)
+        : undefined;
     let reportedContention = false;
     for (;;) {
       let admission: SqliteWorkerOperationAdmission | undefined;
@@ -151,6 +161,9 @@ export function createPlacementTurnClaimWorkerOps(runtime: { path: string; now?:
         }
         if (!granted || admission?.settlement?.kind === "completed") {
           publication?.rollback();
+        } else if (command.type === "placementTurns.handoffRuntimeRefreshResult") {
+          // An uncertain handoff requires fresh recovery authority; never replay its write.
+          publication?.invalidate();
         } else {
           // Native settlement precedes readback. Never replay an uncertain claim or release.
           const reply = await (async () => {
@@ -235,6 +248,25 @@ export function createPlacementTurnClaimWorkerOps(runtime: { path: string; now?:
     }
   }
   return {
+    async handoffRuntimeRefreshResult(
+      input: Omit<
+        PlacementTurnClaimWorkerOperations["placementTurns.handoffRuntimeRefreshResult"]["input"],
+        "nowMs"
+      >,
+      assertCurrent?: () => void,
+    ) {
+      const receipt = await execute(
+        {
+          type: "placementTurns.handoffRuntimeRefreshResult",
+          input: { ...input, nowMs: runtime.now?.() ?? Date.now() },
+        },
+        assertCurrent,
+      );
+      if (!receipt.placement) {
+        throw new Error("Worker runtime refresh handoff receipt is missing its placement");
+      }
+      return receipt.placement;
+    },
     async claimTurn(input: Parameters<Claims["claimTurn"]>[0], assertCurrent?: () => void) {
       const receipt = await execute(
         { type: "placementTurns.claim", input: { claim: input, nowMs: runtime.now?.() } },
