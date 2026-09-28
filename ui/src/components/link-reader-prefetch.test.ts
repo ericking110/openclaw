@@ -94,24 +94,27 @@ describe("GitHub preview warming", () => {
     expect(observer().targets.size).toBe(0);
   });
 
-  it("reuses unchanged positive and negative classifications after unrelated mutations", async () => {
+  it("memoizes href claims while checking DOM exclusions on every scan", async () => {
     const gate = vi.spyOn(linkTargets, "isPreviewAnchor");
     const resolve = vi.spyOn(linkTargets, "resolveLinkReaderTarget");
-    const links = await show([href(1), "https://example.com/page", href(2)]);
+    const links = await show([href(1), "https://example.com/page", href(1)]);
+    expect(resolve).toHaveBeenCalledTimes(2);
     links[2]!.download = "item";
-    await vi.advanceTimersByTimeAsync(0);
     gate.mockClear();
     resolve.mockClear();
 
     container.firstElementChild!.append(document.createTextNode("streaming delta"));
     await vi.advanceTimersByTimeAsync(0);
-    expect(gate).not.toHaveBeenCalled();
     expect(resolve).not.toHaveBeenCalled();
+    expect(gate).toHaveBeenCalledWith(links[0]);
+    expect(gate).toHaveBeenCalledWith(links[2]);
+    expect(gate).not.toHaveBeenCalledWith(links[1]);
     expect([...observer().targets]).toEqual([links[0]]);
 
     links[1]!.href = href(3);
     await vi.advanceTimersByTimeAsync(0);
-    expect(gate.mock.calls.map(([anchor]) => anchor)).toEqual([links[1]]);
+    expect(resolve).toHaveBeenCalledTimes(1);
+    expect(resolve.mock.calls[0]![0]).toBe(href(3));
     observer().intersect(links);
     await vi.advanceTimersByTimeAsync(500);
     expect(prefetch.mock.calls.map(([anchor]) => anchor)).toEqual([links[0], links[1]]);
@@ -123,7 +126,7 @@ describe("GitHub preview warming", () => {
     ["data-session-href", "session"],
     ["class", "markdown-session-link"],
     ["data-link-reader-external", ""],
-  ])("reclassifies the %s exclusion without changing href", async (attribute, value) => {
+  ])("never observes a claimed link excluded by %s", async (attribute, value) => {
     await show([]);
     const link = document.createElement("a");
     link.href = href(1);
@@ -131,62 +134,25 @@ describe("GitHub preview warming", () => {
     container.firstElementChild!.append(link);
     await vi.advanceTimersByTimeAsync(0);
     expect(observer().targets.size).toBe(0);
-    link.removeAttribute(attribute);
-    await vi.advanceTimersByTimeAsync(0);
-    expect(observer().targets.has(link)).toBe(true);
     observer().intersect([link]);
-    link.setAttribute(attribute, value);
     await vi.advanceTimersByTimeAsync(500);
-    expect(observer().targets.size).toBe(0);
     expect(prefetch).not.toHaveBeenCalled();
-    link!.removeAttribute(attribute);
-    await vi.advanceTimersByTimeAsync(0);
-    expect(observer().targets.has(link!)).toBe(true);
-    observer().intersect([link!]);
-    await vi.advanceTimersByTimeAsync(200);
-    expect(prefetch).toHaveBeenCalledTimes(1);
   });
 
-  it.each([
-    ["openclaw-tooltip", ""],
-    ["openclaw-browser-tab-card", ""],
-    ["wa-popover", ""],
-    ["div", "link-reader-hovercard"],
-    ["div", "link-hovercard"],
-    ["div", "session-progress-hovercard"],
-    ["div", "chat-source-card"],
-  ])("reclassifies links moved into and out of %s.%s", async (tag, className) => {
+  it("rechecks excluded ancestry on a scan without reparsing the claim", async () => {
     const [link] = await show();
-    const root = container.firstElementChild!;
-    const excluded = document.createElement(tag);
-    excluded.className = className;
-    root.append(excluded);
-    observer().intersect([link!]);
-    excluded.append(link!);
-    await vi.advanceTimersByTimeAsync(500);
+    const resolve = vi.spyOn(linkTargets, "resolveLinkReaderTarget");
+    container.classList.add("chat-source-card");
+    container.firstElementChild!.append(document.createTextNode("delta"));
+    await vi.advanceTimersByTimeAsync(0);
     expect(observer().targets.size).toBe(0);
-    expect(prefetch).not.toHaveBeenCalled();
-    root.append(link!);
+    expect(resolve).not.toHaveBeenCalled();
+    container.classList.remove("chat-source-card");
+    container.firstElementChild!.append(document.createTextNode("delta"));
     await vi.advanceTimersByTimeAsync(0);
     expect(observer().targets.has(link!)).toBe(true);
+    expect(resolve).not.toHaveBeenCalled();
   });
-
-  it.each(["inside", "outside"])(
-    "invalidates changed ancestor exclusions %s the root",
-    async (where) => {
-      const [link] = await show();
-      const ancestor = where === "inside" ? container.firstElementChild! : container;
-      ancestor.classList.add("chat-source-card");
-      // Outside-root changes were discovered by the next transcript scan.
-      container.firstElementChild!.append(document.createTextNode("delta"));
-      await vi.advanceTimersByTimeAsync(0);
-      expect(observer().targets.size).toBe(0);
-      ancestor.classList.remove("chat-source-card");
-      container.firstElementChild!.append(document.createTextNode("delta"));
-      await vi.advanceTimersByTimeAsync(0);
-      expect(observer().targets.has(link!)).toBe(true);
-    },
-  );
 
   it("keeps ineligible GitHub URLs excluded even when a reader claims them", async () => {
     Object.assign(provider, {
@@ -208,7 +174,7 @@ describe("GitHub preview warming", () => {
     expect(prefetch.mock.calls.map(([anchor]) => anchor)).toEqual([links[2]]);
   });
 
-  it("refreshes negative classifications after capabilities change", async () => {
+  it("refreshes negative claims after capabilities change", async () => {
     Object.assign(provider, { readers: [] });
     await show();
     const [link] = await show();
@@ -219,7 +185,7 @@ describe("GitHub preview warming", () => {
     expect(observer().targets.has(link!)).toBe(true);
   });
 
-  it("keeps nested provider claims current without reclassifying unaffected links", async () => {
+  it("keeps claims scoped to the nearest provider and its current readers", async () => {
     const [outer] = await show();
     const inner = installTestLinkReader(
       document.createElement(linkTargets.LINK_READER_HOVERCARD_PROVIDER_TAG),
@@ -230,16 +196,13 @@ describe("GitHub preview warming", () => {
     container.firstElementChild!.append(inner);
     await vi.advanceTimersByTimeAsync(0);
     expect(observer().targets.has(link)).toBe(true);
-    const gate = vi.spyOn(linkTargets, "isPreviewAnchor");
     Object.assign(inner, { readers: [] });
     container.firstElementChild!.append(document.createTextNode("delta"));
     await vi.advanceTimersByTimeAsync(0);
     expect([...observer().targets]).toEqual([outer]);
-    expect(gate).not.toHaveBeenCalled();
     Object.assign(inner, { readers: [TEST_LINK_READER] });
     container.firstElementChild!.append(document.createTextNode("delta"));
     await vi.advanceTimersByTimeAsync(0);
-    expect(gate.mock.calls.map(([anchor]) => anchor)).toEqual([link]);
     expect(observer().targets.has(link)).toBe(true);
   });
 

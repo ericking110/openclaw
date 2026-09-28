@@ -1,13 +1,17 @@
 import { nothing } from "lit";
 import { AsyncDirective } from "lit/async-directive.js";
 import { directive, type ElementPart } from "lit/directive.js";
-import { composedParent } from "../lib/navigation-click.ts";
 import { linkReaderHovercardBootstrap as bootstrap } from "./link-reader-hovercard-registration.ts";
-import { prefetchLinkReader, previewTargetForAnchor } from "./link-reader-prefetch-request.ts";
+import {
+  prefetchLinkReader,
+  previewTargetForAnchor,
+  resolveLinkReaderPreviewClaim,
+} from "./link-reader-prefetch-request.ts";
 import {
   LINK_READER_HOVERCARD_PROVIDER_TAG,
   linkReaderTargetKey,
   type HoverPreviewOwner,
+  type LinkReaderTarget,
 } from "./link-reader-target.ts";
 
 const PREFETCH_LIMIT = 8;
@@ -31,15 +35,21 @@ class LinkReaderPrefetchDirective extends AsyncDirective {
   private pendingKey: string | undefined;
   private readonly observed = new Map<HTMLAnchorElement, { key: string; visible: boolean }>();
   private readonly attempted = new Set<string>();
-  private classifications = new WeakMap<
-    HTMLAnchorElement,
-    {
-      href: string;
-      readers: HoverPreviewOwner["readers"] | undefined;
-      key: string | null;
+  private claimReaders: HoverPreviewOwner["readers"] | undefined;
+  private readonly claims = new Map<string, LinkReaderTarget | null>();
+  private readonly resolveClaim = (href: string, readers: HoverPreviewOwner["readers"]) => {
+    // Only URL claims are memoized; DOM exclusions stay live on every scan.
+    if (readers !== this.claimReaders) {
+      this.claims.clear();
+      this.claimReaders = readers;
     }
-  >();
-  private ancestors: { element: Element; classes: string | null }[] = [];
+    let claim = this.claims.get(href);
+    if (claim === undefined) {
+      claim = resolveLinkReaderPreviewClaim(href, readers);
+      this.claims.set(href, claim);
+    }
+    return claim;
+  };
 
   render(_sessionKey: string, _active = true, _connected = true) {
     return nothing;
@@ -98,8 +108,8 @@ class LinkReaderPrefetchDirective extends AsyncDirective {
     this.mutations?.disconnect();
     this.mutations = null;
     this.observed.clear();
-    this.classifications = new WeakMap();
-    this.ancestors = [];
+    this.claims.clear();
+    this.claimReaders = undefined;
     clearTimeout(this.timer);
     this.timer = undefined;
     this.scope.abort();
@@ -152,89 +162,35 @@ class LinkReaderPrefetchDirective extends AsyncDirective {
         this.schedulePrefetch();
       });
       this.observer = observer;
-      this.mutations = new MutationObserver((records) => {
-        this.invalidateClassifications(records);
-        this.scheduleScan();
-      });
+      this.mutations = new MutationObserver(() => this.scheduleScan());
       this.mutations.observe(root, {
         childList: true,
         subtree: true,
         attributes: true,
-        attributeFilter: [
-          "href",
-          "class",
-          "download",
-          "data-file-path",
-          "data-session-href",
-          "data-link-reader-external",
-          "slot",
-        ],
+        attributeFilter: ["href"],
       });
     }
-    // A Lit update can queue this scan before mutation delivery. Consume those
-    // records first so moved links never reuse their former container's gate.
-    this.invalidateClassifications(this.mutations?.takeRecords() ?? []);
-    const ancestors: typeof this.ancestors = [];
-    for (let element: Element | null = root; element; element = composedParent(element)) {
-      ancestors.push({ element, classes: element.getAttribute("class") });
-    }
-    // Exclusions above the observed root can change between transcript scans.
-    if (
-      ancestors.length !== this.ancestors.length ||
-      ancestors.some(
-        ({ element, classes }, index) =>
-          element !== this.ancestors[index]?.element || classes !== this.ancestors[index]?.classes,
-      )
-    ) {
-      this.classifications = new WeakMap();
-    }
-    this.ancestors = ancestors;
-    for (const anchor of this.observed.keys()) {
-      if (!root.contains(anchor) || !anchor.hasAttribute("href")) {
+    for (const [anchor, { key }] of this.observed) {
+      const provider = bootstrap.providerFor(anchor);
+      const target = previewTargetForAnchor(anchor, provider, this.resolveClaim);
+      if (!root.contains(anchor) || !target || linkReaderTargetKey(target) !== key) {
         this.observer.unobserve(anchor);
         this.observed.delete(anchor);
       }
     }
     for (const anchor of root.querySelectorAll<HTMLAnchorElement>("a[href]")) {
-      // Nearest-provider lookup preserves nested ownership; reader identity also
-      // invalidates negative claims when a nested provider's capabilities change.
+      if (this.observed.has(anchor)) {
+        continue;
+      }
       const provider = bootstrap.providerFor(anchor);
-      const readers = provider?.client ? provider.readers : undefined;
-      const href = anchor.href;
-      let classification = this.classifications.get(anchor);
-      if (!classification || classification.href !== href || classification.readers !== readers) {
-        const target = previewTargetForAnchor(anchor, provider);
-        classification = { href, readers, key: target ? linkReaderTargetKey(target) : null };
-        this.classifications.set(anchor, classification);
+      const target = previewTargetForAnchor(anchor, provider, this.resolveClaim);
+      if (!target) {
+        continue;
       }
-      const { key } = classification;
-      const observed = this.observed.get(anchor);
-      if (observed && observed.key !== key) {
-        this.observer.unobserve(anchor);
-        this.observed.delete(anchor);
-      }
-      if (key && !this.observed.has(anchor) && !this.attempted.has(key)) {
+      const key = linkReaderTargetKey(target);
+      if (!this.attempted.has(key)) {
         this.observed.set(anchor, { key, visible: false });
         this.observer.observe(anchor);
-      }
-    }
-  }
-
-  private invalidateClassifications(records: MutationRecord[]): void {
-    for (const record of records) {
-      const nodes =
-        record.type === "attributes"
-          ? [record.target]
-          : [...record.addedNodes, ...record.removedNodes];
-      for (const node of nodes) {
-        if (node instanceof HTMLAnchorElement) {
-          this.classifications.delete(node);
-        }
-        if (node instanceof Element) {
-          for (const anchor of node.querySelectorAll<HTMLAnchorElement>("a[href]")) {
-            this.classifications.delete(anchor);
-          }
-        }
       }
     }
   }
