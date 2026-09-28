@@ -83,27 +83,6 @@ targets:
       - package: Sodium
       - sdk: AppIntents.framework
       - sdk: HealthKit.framework
-    preBuildScripts:
-      - name: SwiftFormat (lint)
-        basedOnDependencyAnalysis: false
-        inputFileLists:
-          - $(SRCROOT)/SwiftSources.input.xcfilelist
-        script: |
-          set -euo pipefail
-          export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
-          "$SRCROOT/../../scripts/check-swift-tools.sh" swiftformat
-          swiftformat --lint --config "$SRCROOT/../../config/swiftformat" \
-            --unexclude "$SRCROOT/Sources,$SRCROOT/ShareExtension,$SRCROOT/ActivityWidget,$SRCROOT/$SRCROOT/../shared/OpenClawKit/Sources/OpenClawChatUI,$SRCROOT/../shared/OpenClawKit/Sources/OpenClawKit,$SRCROOT/../shared/OpenClawKit/Sources/OpenClawNativeState,$SRCROOT/../shared/OpenClawKit/Sources/OpenClawProtocol,$SRCROOT/../swabble/Sources/SwabbleKit" \
-            --filelist "$SRCROOT/SwiftSources.input.xcfilelist"
-      - name: SwiftLint
-        basedOnDependencyAnalysis: false
-        inputFileLists:
-          - $(SRCROOT)/SwiftSources.input.xcfilelist
-        script: |
-          set -euo pipefail
-          export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
-          "$SRCROOT/../../scripts/check-swift-tools.sh" swiftlint
-          node "$SRCROOT/../../scripts/run-swiftlint.mts" --strict --config "$SRCROOT/.swiftlint.yml" --use-script-input-file-lists
     settings:
       base:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -305,3 +284,129 @@ targets:
           - JetBrainsMono-SemiBold.ttf
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
+
+  OpenClawTests:
+    type: bundle.unit-test
+    platform: iOS
+    configFiles:
+      Debug: Signing.xcconfig
+      Release: Signing.xcconfig
+    sources:
+      - path: Tests
+        excludes:
+          - Logic
+      - path: ../macos/Tests/OpenClawIPCTests/GatewayWebSocketTestSupport.swift
+        group: Tests
+      - path: ../shared/OpenClawKit/Tests/OpenClawKitTests/NativeGatewayWebSocketFixture.swift
+        group: Tests
+      - path: ../shared/OpenClawKit/Tests/OpenClawKitTests/ChatMermaidRenderModelTests.swift
+        group: Tests
+      - path: ../shared/OpenClawKit/Tests/OpenClawKitTests/ChatSelectableTextViewTests.swift
+        group: Tests
+      - path: ../shared/OpenClawKit/Tests/OpenClawKitTests/ChatPasteboardTests.swift
+        group: Tests
+    dependencies:
+      - target: OpenClaw
+      - package: Swabble
+        product: SwabbleKit
+      - sdk: AppIntents.framework
+    settings:
+      base:
+        CODE_SIGN_IDENTITY: "$(OPENCLAW_CODE_SIGN_IDENTITY)"
+        CODE_SIGN_STYLE: "$(OPENCLAW_CODE_SIGN_STYLE)"
+        DEVELOPMENT_TEAM: "$(OPENCLAW_DEVELOPMENT_TEAM)"
+        PRODUCT_BUNDLE_IDENTIFIER: "$(OPENCLAW_APP_BUNDLE_ID).tests"
+        ENABLE_APP_INTENTS_METADATA_GENERATION: NO
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/OpenClaw.app/OpenClaw"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: "$(OPENCLAW_DEBUG_APP_BUNDLE_ID).tests"
+    info:
+      path: Tests/Info.plist
+      properties:
+        CFBundleDisplayName: "$(PRODUCT_NAME)"
+        CFBundleShortVersionString: "$(OPENCLAW_MARKETING_VERSION)"
+        CFBundleVersion: "$(OPENCLAW_BUILD_VERSION)"
+
+  OpenClawLogicTests:
+    type: bundle.unit-test
+    platform: iOS
+    configFiles:
+      Debug: Signing.xcconfig
+      Release: Signing.xcconfig
+    sources:
+      - path: Tests/Logic
+      - path: ShareExtension/ShareDraftComposer.swift
+        group: ShareExtension
+      - path: ShareExtension/ShareContentExtractor.swift
+        group: ShareExtension
+      - path: ShareExtension/ShareComposeState.swift
+        group: ShareExtension
+      - path: ShareExtension/ShareAttachmentSummary.swift
+        group: ShareExtension
+      - path: ../shared/OpenClawKit/Sources/OpenClawChatUI/OpenClawMascotView.swift
+        group: Shared
+      - path: ../shared/OpenClawKit/Sources/OpenClawChatUI/OpenClawMascotAnimator.swift
+        group: Shared
+      - path: ../shared/OpenClawKit/Sources/OpenClawChatUI/OpenClawMascotCanvas+Accessories.swift
+        group: Shared
+      - path: ../shared/OpenClawKit/Sources/OpenClawChatUI/ChatTypography.swift
+        group: Shared
+      - path: Sources/Services/ExactOpaqueIdentifier.swift
+        group: Sources/Services
+    dependencies:
+      - package: OpenClawKit
+    settings:
+      base:
+        CODE_SIGN_IDENTITY: "$(OPENCLAW_CODE_SIGN_IDENTITY)"
+        CODE_SIGN_STYLE: "$(OPENCLAW_CODE_SIGN_STYLE)"
+        DEVELOPMENT_TEAM: "$(OPENCLAW_DEVELOPMENT_TEAM)"
+        PRODUCT_BUNDLE_IDENTIFIER: "$(OPENCLAW_APP_BUNDLE_ID).logic-tests"
+        ENABLE_APP_INTENTS_METADATA_GENERATION: NO
+        SWIFT_EMIT_CONST_VALUE_PROTOCOLS: ""
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: "$(OPENCLAW_DEBUG_APP_BUNDLE_ID).logic-tests"
+    info:
+      path: Tests/Info.plist
+      properties:
+        CFBundleDisplayName: "$(PRODUCT_NAME)"
+        CFBundleShortVersionString: "$(OPENCLAW_MARKETING_VERSION)"
+        CFBundleVersion: "$(OPENCLAW_BUILD_VERSION)"
+
+  OpenClawUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    configFiles:
+      Debug: Signing.xcconfig
+      Release: Signing.xcconfig
+    sources:
+      - path: UITests
+    dependencies:
+      - target: OpenClaw
+    settings:
+      base:
+        CODE_SIGN_IDENTITY: "$(OPENCLAW_CODE_SIGN_IDENTITY)"
+        CODE_SIGN_STYLE: "$(OPENCLAW_CODE_SIGN_STYLE)"
+        DEVELOPMENT_TEAM: "$(OPENCLAW_DEVELOPMENT_TEAM)"
+        PRODUCT_BUNDLE_IDENTIFIER: "$(OPENCLAW_APP_BUNDLE_ID).ui-test"
+        SDKROOT: iphoneos
+        SUPPORTED_PLATFORMS: "iphonesimulator iphoneos"
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+        TEST_TARGET_NAME: OpenClaw
+        SWIFT_VERSION: "5.0"
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: "$(OPENCLAW_DEBUG_APP_BUNDLE_ID).ui-test"
+    info:
+      path: UITests/Info.plist
+      properties:
+        CFBundleDisplayName: OpenClawUITests
+        CFBundleShortVersionString: "$(OPENCLAW_MARKETING_VERSION)"
+        CFBundleVersion: "$(OPENCLAW_BUILD_VERSION)"
