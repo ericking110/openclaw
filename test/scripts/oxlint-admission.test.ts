@@ -1,5 +1,8 @@
+import type { ChildProcess } from "node:child_process";
+import { once } from "node:events";
 import fs from "node:fs";
 import path from "node:path";
+import { PassThrough } from "node:stream";
 import { afterEach, expect, it, vi } from "vitest";
 import { runManagedCommand } from "../../scripts/lib/managed-child-process.mts";
 import { runSemanticCheck } from "../../scripts/lib/semantic-check-admission.mts";
@@ -114,6 +117,55 @@ it("does not mistake a bare plugin package name for the reviewed relative module
     read.mockRestore();
   }
 });
+
+it.for([false, true])(
+  "bounds advisory capture by bytes and respects stdout backpressure with evidence=%s",
+  async (evidence) => {
+    const root = createTempDir("oxlint-report-memory-");
+    const config = path.join(root, "config.json");
+    fs.writeFileSync(config, JSON.stringify({ rules: { "max-lines": "error" } }));
+    // Below the old character count, above the byte budget, and deliberately
+    // not JSON: overflowing output must stream rather than be parsed or certified.
+    const chunks = ["report:", "é".repeat(600_000)];
+    const forwarded: string[] = [];
+    const drains = process.stdout.listenerCount("drain");
+    const writer = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      forwarded.push(String(chunk));
+      return false;
+    });
+    vi.mocked(runSemanticCheck).mockImplementationOnce(async (options) => {
+      const stdout = new PassThrough();
+      const stderr = new PassThrough();
+      const finished = once(stdout, "end");
+      options.onReady?.({ stdout, stderr } as ChildProcess);
+      for (const chunk of chunks) {
+        stdout.write(chunk);
+      }
+      expect(stdout.isPaused()).toBe(true);
+      process.stdout.emit("drain");
+      expect(stdout.isPaused()).toBe(false);
+      stdout.end();
+      stderr.end();
+      await finished;
+      return 1;
+    });
+    try {
+      expect(
+        await runOxlint(["--config", config, "scripts/run-oxlint.mts"], {
+          ...env,
+          GITHUB_ACTIONS: "true",
+          OPENCLAW_CI_STATIC_EVIDENCE: evidence ? "1" : "0",
+          OPENCLAW_CI_STATIC_EVIDENCE_ID: "bounded-report",
+        }),
+      ).toEqual({ status: 1 });
+      expect(forwarded.join("")).toBe(chunks.join(""));
+      expect(process.stdout.listenerCount("drain")).toBe(drains);
+      expect(fs.readdirSync(root)).toEqual(["config.json"]);
+    } finally {
+      writer.mockRestore();
+    }
+  },
+);
 
 it.for([false, true])(
   "retains native config only while cleanup is uncertain: %s",
