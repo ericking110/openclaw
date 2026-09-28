@@ -10,6 +10,7 @@ import {
 import { createChangedExtensionConfigShardsForPaths } from "../../scripts/lib/ci-extension-test-shards.mts";
 import {
   createNodeTestShardBundles,
+  createSelectedNodeTestShardBundles,
   createUiTestShardGroups,
   resolveCanonicalNodeTestConfig,
   type CompactNodeTestShard,
@@ -446,6 +447,18 @@ it("keeps UI and core changes with exact owners and direct consumers", () => {
   } finally {
     placement.mockRestore();
   }
+  // Tooling is repacked from selected files; unrelated compiler fixtures can
+  // promote its full-suite job without changing this selection's resource needs.
+  const toolingConfig = "test/vitest/vitest.tooling.config.ts";
+  const toolingJobs = expectDefined(
+    createSelectedNodeTestShardBundles(
+      fallbackGroups(shards ?? [])
+        .filter((group) => group.configs.includes(toolingConfig))
+        .flatMap((group) => group.includePatterns ?? []),
+      { runnerBackend: "hybrid", includePrExemptRuntimeTests: true },
+    ),
+    "selected tooling owners",
+  );
   for (const job of shards ?? []) {
     for (const group of job.groups ?? []) {
       const ownerJob = expectDefined(
@@ -467,9 +480,17 @@ it("keeps UI and core changes with exact owners and direct consumers", () => {
       expect(group.env).toEqual(owner.env);
       expect(group.fallbackMaxWorkers).toBe(owner.fallbackMaxWorkers);
       expect(group.minTotalMemoryBytes).toBe(owner.minTotalMemoryBytes);
-      expect(job.env).toEqual(ownerJob.env);
-      expect(job.runner).toBe(ownerJob.runner);
-      expect(job.planConcurrency).toBe(ownerJob.planConcurrency);
+      const resourceJob = group.configs.includes(toolingConfig)
+        ? expectDefined(
+            toolingJobs.find((candidate) =>
+              candidate.groups.some((owner) => owner.shard_name === group.shard_name),
+            ),
+            "selected tooling resource owner",
+          )
+        : ownerJob;
+      expect(job.env).toEqual(resourceJob.env);
+      expect(job.runner).toBe(resourceJob.runner);
+      expect(job.planConcurrency).toBe(resourceJob.planConcurrency);
     }
   }
   expect(createChangedNodeTestShards([paths[1]!, "ui/src/AGENTS.md"], options)).toEqual(
