@@ -6,6 +6,7 @@ import {
   writeNativeHookRelayBridgeRecord,
   type NativeHookRelayBridgeRecord,
 } from "../agents/harness/native-hook-relay-store.js";
+import { hasErrnoCode } from "../infra/errno.js";
 import * as gatewayLock from "../infra/gateway-lock.js";
 import {
   acquireGatewayStateOwner,
@@ -49,6 +50,7 @@ describe("Doctor maintenance with shared-state workers", () => {
     "resident-worker",
     "link-rollback",
     "handoff-contender",
+    "historical-contender",
     "receipt-unchanged",
     "receipt-changed",
   ] as const)(
@@ -91,7 +93,7 @@ describe("Doctor maintenance with shared-state workers", () => {
                 });
               }
               let contenderRefused = false;
-              if (scenario === "handoff-contender") {
+              if (scenario.endsWith("-contender")) {
                 const acquire = gatewayLock.acquireGatewayLock;
                 let observing = false;
                 vi.spyOn(gatewayLock, "acquireGatewayLock").mockImplementation(async (options) => {
@@ -102,12 +104,26 @@ describe("Doctor maintenance with shared-state workers", () => {
                     held.release = async () => {
                       await release();
                       try {
-                        const contender = acquireGatewayStateOwner({
-                          databasePath: path.join(state.stateDir, "state", "openclaw.sqlite"),
-                        });
-                        contender.release();
+                        if (scenario === "historical-contender") {
+                          const { stateLockPath } = gatewayLock.resolveGatewayLockPaths({
+                            ...process.env,
+                            OPENCLAW_STATE_DIR: state.stateDir,
+                          });
+                          // Shipped Gateways know this exclusive sidecar, not the newer root lock.
+                          const descriptor = fs.openSync(stateLockPath, "wx", 0o600);
+                          fs.closeSync(descriptor);
+                          fs.unlinkSync(stateLockPath);
+                        } else {
+                          const contender = acquireGatewayStateOwner({
+                            databasePath: path.join(state.stateDir, "state", "openclaw.sqlite"),
+                          });
+                          contender.release();
+                        }
                       } catch (error) {
-                        if (!(error instanceof GatewayStateOwnerContentionError)) {
+                        if (
+                          !(error instanceof GatewayStateOwnerContentionError) &&
+                          !hasErrnoCode(error, "EEXIST")
+                        ) {
                           throw error;
                         }
                         contenderRefused = true;
@@ -141,7 +157,7 @@ describe("Doctor maintenance with shared-state workers", () => {
                 databaseGenerations,
               });
               try {
-                if (scenario === "handoff-contender") {
+                if (scenario.endsWith("-contender")) {
                   expect(contenderRefused).toBe(true);
                 }
                 await maintenance!.run(async () => {
