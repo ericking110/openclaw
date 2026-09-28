@@ -100,6 +100,8 @@ warm admission checks use the retained identity maps rather than polling the
 filesystem. Reuse and command admission check the actor's known opening-path
 binding even after its original client closes. An entry retains the lifecycle
 owner's physical path admission separately from the original caller's schema scope.
+Each matching actor is checked separately from the caller. A current actor can serve
+a new schema scope, but an ended caller scope still rejects with its original error.
 Each requesting caller still needs complete live admission. A retired secondary
 alias closes only its client, so healthy peers can continue while
 that client's callbacks settle. Losing the actor's opening path requires its active
@@ -355,6 +357,14 @@ transcript-session keys, and SSE inline subagent visibility reads remain migrati
 debt. Process-held incognito databases and the existing
 CLI-import history path still need their owner/lifetime migration; they are not
 new synchronous exceptions or fallbacks for a failed durable worker read.
+
+After readiness, the Gateway prewarms the foreground history worker's modules and
+read-only admission for existing configured session databases. An admitted operator
+connection also starts detached prewarming when that lane is cold. Prewarming reads
+no transcripts, writes no data, and uses normal database custody and cleanup. Warm
+calls coalesce without extending the 30-minute idle retirement deadline; failures
+are debug-only and never block startup or connection admission. Schemas, retention,
+and update behavior are unchanged.
 
 Artifact lists, image pages, and exact transcript-image selection use that same
 history worker. The worker scans and decodes transcript payloads and returns
