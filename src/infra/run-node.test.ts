@@ -2150,6 +2150,28 @@ describe("run-node script", () => {
       expect(fakeProcess.listenerCount("exit")).toBe(0);
     });
 
+    it("wakes a contended lock wait when cancellation arrives", async ({ tmp }) => {
+      const lockDir = path.join(tmp, ".artifacts", "run-node-build.lock");
+      await fs.mkdir(lockDir, { recursive: true });
+      await fs.writeFile(
+        path.join(lockDir, "owner.json"),
+        JSON.stringify({ pid: process.pid, args: ["gateway"] }),
+        "utf-8",
+      );
+      const controller = new AbortController();
+      const waiting = acquireRunNodeBuildLock(
+        {
+          ...lockDeps(tmp, createFakeProcess()),
+          env: { OPENCLAW_RUNNER_LOG: "0", OPENCLAW_RUN_NODE_BUILD_LOCK_POLL_MS: "600000" },
+        },
+        controller.signal,
+      );
+      controller.abort();
+
+      await expect(waiting).rejects.toMatchObject({ name: "AbortError" });
+      expect(fsSync.existsSync(lockDir)).toBe(true);
+    });
+
     it("removes a lock left by a dead wrapper process without waiting for age-out", async ({
       tmp,
     }) => {

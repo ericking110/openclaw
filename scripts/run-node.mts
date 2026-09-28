@@ -10,6 +10,7 @@ import {
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 import { getCommandArgsWithRootOptions } from "../src/infra/cli-root-options.ts";
 import {
@@ -31,7 +32,6 @@ import {
   runtimePostBuildWatchedPaths,
   type BundledPluginBuildEntry,
 } from "./lib/run-node-input-state.mts";
-import { sleep } from "./lib/sleep.mjs";
 import {
   discoverStaticExtensionAssets,
   resolveStaticExtensionAssetSource,
@@ -1326,7 +1326,8 @@ export const acquireRunNodeBuildLock = async (
       if (consumeWaitLog()) {
         logRunner("Waiting for TypeScript/runtime artifact lock.", deps);
       }
-      await sleep(pollMs);
+      // Cancellation must wake a contended wait, not only the next poll.
+      await delay(pollMs, undefined, signal ? { signal } : undefined);
     }
   }
 
