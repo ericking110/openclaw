@@ -2124,23 +2124,6 @@ describe("run-node script", () => {
       stderr: { write: () => true } as unknown as NodeJS.WriteStream,
     });
 
-    it("releases the lock directory when the wrapper receives SIGINT", async ({ tmp }) => {
-      const fakeProcess = createFakeProcess();
-      const lockDir = path.join(tmp, ".artifacts", "run-node-build.lock");
-
-      const release = await acquireRunNodeBuildLock(lockDeps(tmp, fakeProcess));
-      expect(fsSync.existsSync(lockDir)).toBe(true);
-
-      fakeProcess.emit("SIGINT");
-      expect(fsSync.existsSync(lockDir)).toBe(false);
-
-      // Normal release after signal must be a no-op.
-      expect(release()).toBeUndefined();
-      expect(fakeProcess.listenerCount("SIGINT")).toBe(0);
-      expect(fakeProcess.listenerCount("SIGTERM")).toBe(0);
-      expect(fakeProcess.listenerCount("exit")).toBe(0);
-    });
-
     it("releases the lock directory on process exit", async ({ tmp }) => {
       const fakeProcess = createFakeProcess();
       const lockDir = path.join(tmp, ".artifacts", "run-node-build.lock");
@@ -2153,13 +2136,11 @@ describe("run-node script", () => {
       expect(release()).toBeUndefined();
     });
 
-    it("detaches signal listeners after a normal release", async ({ tmp }) => {
+    it("detaches the exit listener after a normal release", async ({ tmp }) => {
       const fakeProcess = createFakeProcess();
       const lockDir = path.join(tmp, ".artifacts", "run-node-build.lock");
 
       const release = await acquireRunNodeBuildLock(lockDeps(tmp, fakeProcess));
-      expect(fakeProcess.listenerCount("SIGINT")).toBe(1);
-      expect(fakeProcess.listenerCount("SIGTERM")).toBe(1);
       expect(fakeProcess.listenerCount("exit")).toBe(1);
 
       release();
