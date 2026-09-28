@@ -8,7 +8,7 @@ import {
   NODE_WORKER_SUPERVISOR_STATUS_COMMAND,
 } from "../../infra/node-commands.js";
 import {
-  formatNodeRunnerUpdateRequired,
+  formatNodeRunnerInventoryIssue,
   NODE_RUNNER_UPDATE_REQUIRED_ISSUE,
   NODE_WORKER_ENVIRONMENT_SESSION_VERSION,
   resolveNodeWorkerExecutionIssue,
@@ -338,7 +338,7 @@ export function createNodeWorkerLaunchAdapter(options: NodeWorkerLaunchAdapterOp
           resolveNodeWorkerExecutionIssue(node.workerHost))
       ) {
         throw new Error(
-          formatNodeRunnerUpdateRequired(node.nodeId, NODE_RUNNER_UPDATE_REQUIRED_ISSUE),
+          formatNodeRunnerInventoryIssue(node.nodeId, NODE_RUNNER_UPDATE_REQUIRED_ISSUE),
         );
       }
       // A retained environment already owns its slot. The node arbitrates new physical
