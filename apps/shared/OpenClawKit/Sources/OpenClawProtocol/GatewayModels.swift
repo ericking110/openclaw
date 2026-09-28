@@ -25910,6 +25910,36 @@ public struct SessionPlacementDiskSpace: Codable, Sendable {
     }
 }
 
+public struct SessionPlacementWorkerRuntimeInstall: Codable, Sendable {
+    public let phase: AnyCodable
+    public let transferredbytes: Int
+    public let totalbytes: Int
+    public let startedatms: Int
+    public let updatedatms: Int
+
+    public init(
+        phase: AnyCodable,
+        transferredbytes: Int,
+        totalbytes: Int,
+        startedatms: Int,
+        updatedatms: Int)
+    {
+        self.phase = phase
+        self.transferredbytes = transferredbytes
+        self.totalbytes = totalbytes
+        self.startedatms = startedatms
+        self.updatedatms = updatedatms
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case phase
+        case transferredbytes = "transferredBytes"
+        case totalbytes = "totalBytes"
+        case startedatms = "startedAtMs"
+        case updatedatms = "updatedAtMs"
+    }
+}
+
 public struct SessionPlacementRunner: Codable, Sendable {
     public let kind: String
     public let status: AnyCodable
@@ -26032,6 +26062,7 @@ public struct ProvisioningSessionPlacement: Codable, Sendable {
     public let profileid: String?
     public let machine: SessionPlacementMachine?
     public let environmentid: String?
+    public let workerruntimeinstall: SessionPlacementWorkerRuntimeInstall?
 
     public init(
         state: String,
@@ -26042,7 +26073,8 @@ public struct ProvisioningSessionPlacement: Codable, Sendable {
         providerid: String? = nil,
         profileid: String? = nil,
         machine: SessionPlacementMachine? = nil,
-        environmentid: String? = nil)
+        environmentid: String? = nil,
+        workerruntimeinstall: SessionPlacementWorkerRuntimeInstall? = nil)
     {
         self.state = state
         self.generation = generation
@@ -26053,6 +26085,7 @@ public struct ProvisioningSessionPlacement: Codable, Sendable {
         self.profileid = profileid
         self.machine = machine
         self.environmentid = environmentid
+        self.workerruntimeinstall = workerruntimeinstall
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -26065,6 +26098,7 @@ public struct ProvisioningSessionPlacement: Codable, Sendable {
         case profileid = "profileId"
         case machine
         case environmentid = "environmentId"
+        case workerruntimeinstall = "workerRuntimeInstall"
     }
 }
 
@@ -26196,6 +26230,7 @@ public struct ActiveWorkerSessionPlacement: Codable, Sendable {
     public let diskspace: SessionPlacementDiskSpace?
     public let workspaceresultreconciling: Bool?
     public let runner: SessionPlacementRunner?
+    public let workerruntimeinstall: SessionPlacementWorkerRuntimeInstall?
 
     public init(
         state: String,
@@ -26216,7 +26251,8 @@ public struct ActiveWorkerSessionPlacement: Codable, Sendable {
         workspaceresultconflict: [String: AnyCodable]? = nil,
         diskspace: SessionPlacementDiskSpace? = nil,
         workspaceresultreconciling: Bool? = nil,
-        runner: SessionPlacementRunner? = nil)
+        runner: SessionPlacementRunner? = nil,
+        workerruntimeinstall: SessionPlacementWorkerRuntimeInstall? = nil)
     {
         self.state = state
         self.generation = generation
@@ -26237,6 +26273,7 @@ public struct ActiveWorkerSessionPlacement: Codable, Sendable {
         self.diskspace = diskspace
         self.workspaceresultreconciling = workspaceresultreconciling
         self.runner = runner
+        self.workerruntimeinstall = workerruntimeinstall
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -26259,6 +26296,7 @@ public struct ActiveWorkerSessionPlacement: Codable, Sendable {
         case diskspace = "diskSpace"
         case workspaceresultreconciling = "workspaceResultReconciling"
         case runner
+        case workerruntimeinstall = "workerRuntimeInstall"
     }
 }
 

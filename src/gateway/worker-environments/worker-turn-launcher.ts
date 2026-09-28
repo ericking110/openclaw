@@ -6,6 +6,7 @@ import type {
 } from "../../agents/session-placement-admission.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { emitAgentRunStatusEvent } from "../../infra/agent-run-status-events.js";
+import { markDiagnosticRunProgress } from "../../logging/diagnostic-run-activity.js";
 import { createLazyRuntimeModule } from "../../shared/lazy-runtime.js";
 import { WORKER_ADMISSION_DEADLINE_MS } from "../../worker/worker-connection-contract.js";
 import { StaleWorkerBuildError } from "./admission.js";
@@ -484,6 +485,12 @@ export function createWorkerSessionTurnPlacementProvider(options: WorkerTurnLaun
                 );
                 timeout.unref?.();
                 try {
+                  markDiagnosticRunProgress({
+                    sessionId: placement.sessionId,
+                    sessionKey: identity.sessionKey,
+                    runId: claim.runId,
+                    reason: "worker:runtime_refresh",
+                  });
                   emitAgentRunStatusEvent({
                     runId: claim.runId,
                     phase: "provisioning_environment",

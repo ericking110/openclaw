@@ -503,6 +503,7 @@ export class ChatPane extends ChatPaneLayoutRender {
       onModelSetup: () => this.context.navigate("model-setup"),
       error: providerPaused ? null : state.lastError,
       diskSpace: placementComposer.diskSpace,
+      workerRuntimeInstall: placementComposer.workerRuntimeInstall,
       runError:
         catalogKey || providerPaused ? null : (state.chatRunError ?? placementComposer.runError),
       inlineApproval,

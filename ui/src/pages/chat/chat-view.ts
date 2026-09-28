@@ -2,6 +2,7 @@ import { html, nothing, type TemplateResult } from "lit";
 import { styleMap } from "lit/directives/style-map.js";
 import type {
   SessionPlacementDiskSpace,
+  SessionPlacementWorkerRuntimeInstall,
   SessionSharingRole,
   SessionSuggestion,
   SessionSuggestionResolution,
@@ -114,6 +115,7 @@ export type ChatProps = Omit<
     providerReviewNotice?: TemplateResult | typeof nothing;
     error: string | null;
     diskSpace?: SessionPlacementDiskSpace;
+    workerRuntimeInstall?: SessionPlacementWorkerRuntimeInstall;
     inlineApproval?: ExecApprovalRequest | null;
     approvalBusy?: boolean;
     approvalCanGrant: boolean;

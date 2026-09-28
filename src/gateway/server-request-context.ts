@@ -159,6 +159,7 @@ type GatewayRequestContextRuntime = Pick<
       | {
           diskSpace: GatewayRequestContext["workerPlacementDiskSpaceReader"];
           runnerAvailability: GatewayRequestContext["workerPlacementRunnerAvailabilityReader"];
+          runtimeInstall?: GatewayRequestContext["workerPlacementRuntimeInstallReader"];
           repositoryWorkspaceMutationService: GatewayRequestContext["workerRepositoryWorkspaceMutationService"];
         }
       | undefined;
@@ -239,6 +240,7 @@ export function createGatewayRequestContext(
   const workerPlacementDiskSpaceReader = runtime.workerPlacementRuntime?.diskSpace;
   const workerPlacementRunnerAvailabilityReader =
     runtime.workerPlacementRuntime?.runnerAvailability;
+  const workerPlacementRuntimeInstallReader = runtime.workerPlacementRuntime?.runtimeInstall;
   const workerRepositoryWorkspaceMutationService =
     runtime.workerPlacementRuntime?.repositoryWorkspaceMutationService;
   const {
@@ -520,6 +522,7 @@ export function createGatewayRequestContext(
     ...(workerSessionPlacementService ? { workerSessionPlacementService } : {}),
     ...(workerPlacementDiskSpaceReader ? { workerPlacementDiskSpaceReader } : {}),
     ...(workerPlacementRunnerAvailabilityReader ? { workerPlacementRunnerAvailabilityReader } : {}),
+    ...(workerPlacementRuntimeInstallReader ? { workerPlacementRuntimeInstallReader } : {}),
     ...(workerRepositoryWorkspaceMutationService
       ? { workerRepositoryWorkspaceMutationService }
       : {}),
