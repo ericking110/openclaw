@@ -7,12 +7,14 @@ import { packChangedExtensionConfigShards } from "../../scripts/lib/ci-extension
 import { encodeNodeTestGroups } from "../../scripts/lib/ci-node-test-groups-codec.mts";
 import { listExtensionTestFilesForRoots } from "../../scripts/lib/extension-test-plan.mts";
 import { listVitestRuntimeConsumerFiles } from "../../scripts/lib/vitest-build-prerequisites.mts";
+import { VITEST_PRETEST_BUILD_SECONDS } from "../../scripts/lib/vitest-shard-metadata.mts";
 import { useAutoCleanupTempDirTracker } from "../helpers/temp-dir.js";
 import { databaseWorkerExtensionTestFiles } from "../vitest/vitest.extension-database-workers-paths.mjs";
 import { isSharedVitestExcludedPath } from "../vitest/vitest.pattern-file.ts";
 
 const tempDirs = useAutoCleanupTempDirTracker(afterEach);
 type ExtensionShard = Parameters<typeof packChangedExtensionConfigShards>[0][number];
+const runtimePreparationSeconds = VITEST_PRETEST_BUILD_SECONDS.runtime;
 
 function fallbackGroups(shards: ReturnType<typeof createChangedExtensionFallbackShards>) {
   return shards.flatMap((shard) => shard.groups ?? [{ ...shard, shard_name: shard.shardName }]);
@@ -30,7 +32,7 @@ const cases: Array<{
   jobs: number;
   seconds?: number;
 }> = [
-  { name: "same preparation", second: {}, jobs: 1, seconds: 126 },
+  { name: "same preparation", second: {}, jobs: 1, seconds: runtimePreparationSeconds + 26 },
   { name: "exact time bound", second: { predictedSeconds: 282 }, jobs: 1, seconds: 300 },
   { name: "over time bound", second: { predictedSeconds: 283 }, jobs: 2 },
   {
@@ -38,7 +40,14 @@ const cases: Array<{
     second: { pretestBuildMode: undefined, predictedSeconds: 8 },
     jobs: 2,
   },
-  { name: "different preparation", second: { pretestBuildMode: "private-qa" }, jobs: 2 },
+  {
+    name: "different preparation",
+    second: {
+      pretestBuildMode: "private-qa",
+      predictedSeconds: VITEST_PRETEST_BUILD_SECONDS["private-qa"] + 8,
+    },
+    jobs: 2,
+  },
   { name: "different runner", second: { runner: "ubuntu-24.04" }, jobs: 2 },
   { name: "different dist requirement", second: { requiresDist: true }, jobs: 2 },
 ];
@@ -53,7 +62,7 @@ describe("extension preparation packing", () => {
         includePatterns: ["extensions/codex/src/app-server/settled-turn-finalizer.native.test.ts"],
         env: { OPENCLAW_NODE_TEST_VITEST_ARGS_JSON: '["--isolate"]' },
         pretestBuildMode: "runtime",
-        predictedSeconds: 118,
+        predictedSeconds: runtimePreparationSeconds + 18,
         runner: "blacksmith-8vcpu-ubuntu-2404",
         requiresDist: false,
         planConcurrency: 1,
@@ -65,7 +74,7 @@ describe("extension preparation packing", () => {
         includePatterns: ["extensions/telegram/src/sticker-cache.selection.test.ts"],
         env: { OPENCLAW_NODE_TEST_VITEST_ARGS_JSON: '["--fileParallelism=false"]' },
         pretestBuildMode: "runtime",
-        predictedSeconds: 108,
+        predictedSeconds: runtimePreparationSeconds + 8,
         runner: "blacksmith-8vcpu-ubuntu-2404",
         requiresDist: false,
         planConcurrency: 1,
