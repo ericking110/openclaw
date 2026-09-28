@@ -514,6 +514,15 @@ export async function handleOpenResponsesHttpRequest(
     rememberResponseSession({ ...responseSessionScope, responseId, sessionKey }, () =>
       assertGatewayHttpRequestCurrent(handled.requestAuth),
     );
+  const rememberSessionAfterFailure = async () => {
+    try {
+      await rememberSession();
+    } catch (persistenceError) {
+      logWarn(
+        `openresponses: continuity persistence failed after run error: ${String(persistenceError)}`,
+      );
+    }
+  };
   const outputItemId = `msg_${randomUUID()}`;
   const streamMaxTokens = payload.max_output_tokens;
   const streamTemperature = payload.temperature;
@@ -548,19 +557,19 @@ export async function handleOpenResponsesHttpRequest(
       });
     } catch (error) {
       if (!abortController.signal.aborted && !isClientToolNameConflictError(error)) {
-        try {
-          await rememberSession();
-        } catch (persistenceError) {
-          logWarn(
-            `openresponses: continuity persistence failed after run error: ${String(persistenceError)}`,
-          );
-        }
+        await rememberSessionAfterFailure();
       }
       throw error;
     }
+    if (abortController.signal.aborted) {
+      return result;
+    }
     // Commit continuity before either JSON or SSE can publish a terminal response.
-    // Persistence failure reports HTTP 500 / response.failed, never an uncontinuable success.
-    if (!abortController.signal.aborted) {
+    // A failed run keeps its own error response; only a successful run fails on persistence,
+    // so it reports HTTP 500 / response.failed instead of an uncontinuable success.
+    if (readOpenAiHttpRunTerminal(result).runFailed) {
+      await rememberSessionAfterFailure();
+    } else {
       await rememberSession();
     }
     return result;
@@ -691,6 +700,8 @@ export async function handleOpenResponsesHttpRequest(
     if (!finalizeRequested) {
       return;
     }
+    // finalUsage is set only after runAgentCommand settles, which commits response
+    // continuity first; lifecycle events alone must never publish a terminal event.
     if (!finalUsage) {
       return;
     }

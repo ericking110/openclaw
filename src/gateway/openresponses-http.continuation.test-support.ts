@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { expect, it, vi } from "vitest";
 import { createDeferred } from "../../test/helpers/promise.js";
 import { FailoverError } from "../agents/failover-error.js";
+import { ToolAuthorizationError } from "../agents/tool-input-error.js";
+import { recordAgentRunTerminalOutcome } from "../channels/turn/agent-run-terminal-outcome.js";
 import * as logger from "../logger.js";
 import { seedPluginStateEntriesForTests } from "../plugin-state/plugin-state-store.test-helpers.js";
 import {
@@ -238,6 +240,94 @@ export function registerOpenResponsesContinuationTests({
         });
         expect(persistence).toHaveBeenCalledTimes(1);
         expect(warnings).toHaveBeenCalledWith(expect.stringContaining(persistenceError.message));
+      } finally {
+        persistence.mockRestore();
+        warnings.mockRestore();
+      }
+    },
+  );
+
+  it.each([false, true])(
+    "preserves resolved failed-run responses when continuity persistence rejects (stream=%s)",
+    async (stream) => {
+      const privateDetail = "raw provider detail should stay private";
+      const persistence = vi.spyOn(responseSessions, "rememberResponseSession");
+      const warnings = vi.spyOn(logger, "logWarn").mockImplementation(() => {});
+      agentCommandMock.mockClear();
+      try {
+        for (const persistenceError of [
+          undefined,
+          new Error("synthetic continuity write failed"),
+          new ToolAuthorizationError("synthetic continuity write denied"),
+        ]) {
+          if (persistenceError) {
+            persistence.mockRejectedValueOnce(persistenceError);
+          }
+          agentCommandMock.mockResolvedValueOnce(
+            recordAgentRunTerminalOutcome(
+              {
+                payloads: [{ text: "Command may have changed state", isError: true }],
+                meta: {
+                  error: { kind: "incomplete_turn", message: privateDetail },
+                  agentMeta: {
+                    sessionId: "failed-continuation-session",
+                    provider: "openai",
+                    model: "test-model",
+                    usage: { input: 11, output: 7, total: 18 },
+                  },
+                },
+              },
+              "failed",
+            ) as never,
+          );
+
+          const response = await postResponses(getPort(), {
+            model: "openclaw",
+            input: "hi",
+            stream,
+          });
+          expect(response.status).toBe(stream ? 200 : 500);
+          const body = await response.text();
+          expect(body).not.toContain(privateDetail);
+          let resource: ResponseResource;
+          if (stream) {
+            const events = parseSseEvents(body);
+            expect(
+              events
+                .filter((event) =>
+                  ["response.completed", "response.incomplete", "response.failed"].includes(
+                    event.event ?? "",
+                  ),
+                )
+                .map((event) => event.event),
+            ).toEqual(["response.failed"]);
+            expect(events.at(-1)?.data).toBe("[DONE]");
+            resource = (
+              JSON.parse(findSseEvent(events, "response.failed").data) as {
+                response: ResponseResource;
+              }
+            ).response;
+            expect(resource.usage).toMatchObject({
+              input_tokens: 11,
+              output_tokens: 7,
+              total_tokens: 18,
+            });
+          } else {
+            resource = JSON.parse(body) as ResponseResource;
+          }
+          expect(resource).toMatchObject({
+            status: "failed",
+            output: [],
+            error: { code: "api_error", message: "internal error" },
+          });
+          if (persistenceError) {
+            expect(warnings).toHaveBeenCalledWith(
+              expect.stringContaining(persistenceError.message),
+            );
+          }
+        }
+        expect(agentCommandMock).toHaveBeenCalledTimes(3);
+        expect(persistence).toHaveBeenCalledTimes(3);
       } finally {
         persistence.mockRestore();
         warnings.mockRestore();
