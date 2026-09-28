@@ -12,6 +12,7 @@ final class BootstrapSetupFailureUITests: XCTestCase {
 
     private func assertBootstrapRefusal(inSettings: Bool) throws {
         self.continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
         self.addUIInterruptionMonitor(withDescription: "Local network access") { alert in
             guard alert.buttons["Allow"].exists else { return false }
             alert.buttons["Allow"].tap()
@@ -61,19 +62,30 @@ final class BootstrapSetupFailureUITests: XCTestCase {
             self.continueOnboarding(in: app)
         }
         let originalManualEndpoint = try self.manualEndpoint(in: app)
-        if !inSettings {
+        if inSettings {
+            // Recycled List cells can retain pre-scroll accessibility frames. Return
+            // to the top with the status-bar gesture before targeting the setup field.
+            let statusBarHeight = app.navigationBars["Gateway"].frame.minY - app.frame.minY
+            XCTAssertGreaterThan(statusBarHeight, 0)
+            app.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: 20, dy: statusBarHeight / 2)).tap()
+        } else {
             let back = app.buttons["Back"]
             XCTAssertTrue(back.isHittable)
             back.tap()
-        }
-        for _ in 0..<12 where !setup.isHittable {
-            app.swipeDown()
+            for _ in 0..<12 where !setup.isHittable {
+                app.swipeDown()
+            }
         }
         XCTAssertTrue(setup.exists)
         XCTAssertTrue(setup.isHittable)
         setup.tap()
+        if inSettings {
+            XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3))
+        }
         let code = #"{"url":"wss://bootstrap-refusal.invalid:443","bootstrapToken":"test-bootstrap-refusal"}"#
         setup.typeText(code)
+        XCTAssertEqual(setup.value as? String, code, "BOOTSTRAP_SETUP_INPUT_NOT_ENTERED")
         if !inSettings {
             app.buttons["Dismiss Keyboard"].tap()
         }
