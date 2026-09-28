@@ -1,7 +1,6 @@
 import type { SkillResourceDelivery } from "../../packages/gateway-protocol/src/schema/skill-resources.js";
 import type { WorkerTranscriptMessage } from "../../packages/gateway-protocol/src/schema/worker-admission.js";
 import type {
-  WorkerInferenceContext,
   WorkerInferenceModelRef,
   WorkerInferenceOptions,
 } from "../../packages/gateway-protocol/src/schema/worker-inference.js";
@@ -30,7 +29,7 @@ import { resolveToolLoopDetectionConfig } from "../agents/tool-loop-detection-co
 import { wrapToolWithGatewayCallerIdentity } from "../agents/tools/gateway-caller-context.js";
 import { DEFAULT_AGENTS_FILENAME, loadWorkspaceBootstrapFiles } from "../agents/workspace.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
-import type { AssistantMessage, AssistantMessageEventStreamLike } from "../llm/types.js";
+import type { AssistantMessage } from "../llm/types.js";
 import { materializeSkillResources } from "../skills/runtime/resources.js";
 import { createWorkerBrowserToolRuntime, type WorkerBrowserRuntime } from "./browser-runtime.js";
 import { createWorkerComputerTool } from "./computer-runtime.js";
@@ -40,6 +39,7 @@ import {
   toWorkerInferenceContext,
   type WorkerTranscriptClient,
 } from "./embedded-agent-transcript.runtime.js";
+import type { createWorkerInferenceStreamAdapter } from "./inference-stream.runtime.js";
 import type { WorkerBrowserLaunchDescriptor, WorkerLaunchPlan } from "./launch-descriptor.js";
 import {
   WORKER_LOCAL_TOOL_NAMES,
@@ -56,19 +56,6 @@ function toWorkerAgentError(value: unknown, fallback: string): Error {
   return value instanceof Error ? value : new Error(fallback, { cause: value });
 }
 
-type WorkerEmbeddedInferenceRequest = {
-  modelRef: WorkerInferenceModelRef;
-  context: WorkerInferenceContext;
-  options: WorkerInferenceOptions;
-  signal?: AbortSignal;
-};
-
-type WorkerEmbeddedInferenceClient = {
-  stream: (
-    request: WorkerEmbeddedInferenceRequest,
-  ) => AssistantMessageEventStreamLike | Promise<AssistantMessageEventStreamLike>;
-};
-
 type RunWorkerEmbeddedTurnParams = {
   skillResources?: SkillResourceDelivery;
   skillAuthoring?: import("../../packages/gateway-protocol/src/schema/worker-skill-workshop.js").WorkerSkillWorkshopBinding;
@@ -84,7 +71,7 @@ type RunWorkerEmbeddedTurnParams = {
   runId: string;
   prompt: WorkerLaunchPlan["assignment"]["prompt"];
   modelRef: WorkerInferenceModelRef;
-  inference: WorkerEmbeddedInferenceClient;
+  inference: { stream: ReturnType<typeof createWorkerInferenceStreamAdapter> };
   transcript: WorkerTranscriptClient;
   live: WorkerLiveClient;
   sessions?: Parameters<typeof createWorkerSessionTools>[0];
@@ -105,7 +92,11 @@ const WORKER_TOOL_CONFIG = { plugins: { enabled: false } } satisfies OpenClawCon
 
 export async function runWorkerEmbeddedTurn(params: RunWorkerEmbeddedTurnParams): Promise<void> {
   const resources = params.skillResources
-    ? await materializeSkillResources(params.skillResources, () => params.signal?.throwIfAborted())
+    ? await materializeSkillResources(
+        params.skillResources,
+        () => params.signal?.throwIfAborted(),
+        { sessionId: params.sessionId, workspaceDir: params.cwd },
+      )
     : undefined;
   try {
     await runWorkerEmbeddedTurnWithResources(
