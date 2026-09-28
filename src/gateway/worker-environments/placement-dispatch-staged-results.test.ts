@@ -235,6 +235,8 @@ describe("staged worker placement result recovery", () => {
           return {
             ...applied,
             verifyStable: async () => {},
+            publishStagedResult: async () => {},
+            discardPreparedStagedResult: async () => {},
             getAppliedWorkspaceResult: () => applied,
           };
         },

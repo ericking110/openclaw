@@ -171,6 +171,8 @@ async function createBuildRecoveryHarness(
             changed: false,
             verifyStable: async () => {},
             verifyLocalStable: async () => {},
+            publishStagedResult: async () => {},
+            discardPreparedStagedResult: async () => {},
           };
         },
         stop: async () => {},
