@@ -381,7 +381,7 @@ describe("canonical shared-state worker admission", () => {
   });
 
   it.runIf(process.platform === "darwin" && existsSync("/usr/bin/SetFile"))(
-    "refuses a lazy write after the same inode has a changed birthtime",
+    "permits a lazy write after same-inode birthtime metadata changes",
     async () => {
       const seeded = context();
       const databasePath = seeded.admission.databasePath;
@@ -408,7 +408,6 @@ describe("canonical shared-state worker admission", () => {
         { existingOnly: true },
       );
       const before = statSync(databasePath, { bigint: true });
-      const beforeBytes = readFileSync(databasePath);
       // macOS can change birth time without reallocating the inode.
       execFileSync("/usr/bin/SetFile", ["-d", "01/02/2000 03:04:05", databasePath]);
       const after = statSync(databasePath, { bigint: true });
@@ -416,18 +415,13 @@ describe("canonical shared-state worker admission", () => {
       expect(after.birthtimeNs).not.toBe(before.birthtimeNs);
       const input = {
         configPath: "/synthetic/changed-birthtime.json",
-        patch: { last_observed_suspicious_signature: "must-stay-absent" },
+        patch: { last_observed_suspicious_signature: "metadata-change" },
         expected: null,
         updatedAtMs: 100,
       };
-      let failure: unknown;
-      try {
-        await executeOpenClawStateWorker(captured, { type: "config.health.patch", input });
-      } catch (error) {
-        failure = error;
-      }
-      const bytesUnchanged = readFileSync(databasePath).equals(beforeBytes);
-      const sidecars = [databasePath + "-wal", databasePath + "-shm"].filter(existsSync);
+      await expect(
+        executeOpenClawStateWorker(captured, { type: "config.health.patch", input }),
+      ).resolves.toBe(true);
       await closeOpenClawStateDatabaseAsync();
       const database = openOpenClawStateDatabase({ path: databasePath, env: seeded.environment });
       const row = database.db
@@ -435,10 +429,7 @@ describe("canonical shared-state worker admission", () => {
           "SELECT last_observed_suspicious_signature FROM config_health_entries WHERE config_path = ?",
         )
         .get(input.configPath);
-      expect(failure).toMatchObject({ message: expect.stringContaining("identity changed") });
-      expect(bytesUnchanged).toBe(true);
-      expect(sidecars).toEqual([]);
-      expect(row).toBeUndefined();
+      expect(row).toEqual({ last_observed_suspicious_signature: "metadata-change" });
     },
   );
 

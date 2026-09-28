@@ -434,7 +434,7 @@ export function createOpenClawStateDatabaseAsyncLifecycle() {
     }
     // Cold binding retires vanished paths even when another hardlink keeps the file alive.
     // Warm captures use the retained admission without polling the filesystem.
-    for (const pathname of findChangedDatabasePaths(record.paths, record.identity, identity)) {
+    for (const pathname of findChangedDatabasePaths(record.paths, identity)) {
       record.admissions.delete(pathname);
       record.paths.delete(pathname);
       if (recordsByPath.get(pathname) === record) {

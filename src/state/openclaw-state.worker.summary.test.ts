@@ -1,3 +1,5 @@
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   acquireStateDatabaseSchemaLease,
@@ -18,11 +20,9 @@ import {
   createOpenClawTestState,
   type OpenClawTestState,
 } from "../test-utils/openclaw-test-state.js";
-import {
-  closeOpenClawStateDatabaseAsync,
-  isOpenClawStateDatabaseOpen,
-} from "./openclaw-state-db-cache.js";
+import { closeOpenClawStateDatabaseAsync } from "./openclaw-state-db-cache.js";
 import { openOpenClawStateDatabase } from "./openclaw-state-db.js";
+import { resolveOpenClawStateSqlitePath } from "./openclaw-state-db.paths.js";
 import { captureOpenClawStateWorkerContext } from "./openclaw-state-worker-context.js";
 import {
   createSqliteWorkerBackend,
@@ -43,6 +43,13 @@ afterEach(async () => {
   await closeOpenClawStateDatabaseAsync();
   await state.cleanup();
 });
+
+function createExistingStateContext() {
+  const databasePath = resolveOpenClawStateSqlitePath(state.env);
+  mkdirSync(path.dirname(databasePath), { recursive: true });
+  writeFileSync(databasePath, "");
+  return captureOpenClawStateWorkerContext({ path: databasePath, env: state.env });
+}
 
 it("retains the shared native handle until its last actor closes and preserves rows on reopen", async () => {
   const context = captureOpenClawStateWorkerContext();
@@ -127,9 +134,8 @@ it("retains the shared native handle until its last actor closes and preserves r
 it.each(["kv", "health"] as const)(
   "retains a promoted KV actor's native handle when %s closes first",
   async (firstToClose) => {
-    const databasePath = openOpenClawStateDatabase().path;
-    await closeOpenClawStateDatabaseAsync();
-    const context = captureOpenClawStateWorkerContext();
+    const context = createExistingStateContext();
+    const databasePath = context.admission.databasePath;
     const key = { pluginId: "borrow-fixture", namespace: "shared", key: "answer" };
     const kv = runWithSqliteWorkerStateContext(context, () =>
       openExistingSqliteWorkerBackend(undefined, {
@@ -144,7 +150,7 @@ it.each(["kv", "health"] as const)(
         kv.execute({ type: "pluginState.lookup", input: key }),
       ),
     ).toEqual({ ok: true, value: undefined });
-    expect(isOpenClawStateDatabaseOpen(databasePath)).toBe(false);
+    expect(readFileSync(databasePath)).toEqual(Buffer.alloc(0));
     const stages: string[] = [];
     withStateDatabaseSchemaMaintenance({ databasePath }, () => {
       const admission = createSqliteWorkerOperationAdmission((request, grant) => {
@@ -270,18 +276,19 @@ it.each(["kv", "health"] as const)(
 it.each(["config.health.patch", "diagnostic.register"] as const)(
   "retains %s writes from existing-only actors until last close and durably reopens",
   async (operation) => {
-    const databasePath = openOpenClawStateDatabase().path;
+    const databasePath = openOpenClawStateDatabase({ env: state.env }).path;
     await closeOpenClawStateDatabaseAsync();
-    const context = captureOpenClawStateWorkerContext();
+    const initialBytes = readFileSync(databasePath);
+    const context = captureOpenClawStateWorkerContext({ path: databasePath, env: state.env });
     const first = runWithSqliteWorkerStateContext(context, () =>
       openExistingSqliteWorkerBackend(undefined, {
-        databasePath,
+        databasePath: context.admission.databasePath,
         existingIdentity: context.admission.identity.key,
       }),
     );
     const second = runWithSqliteWorkerStateContext(context, () =>
       openExistingSqliteWorkerBackend(undefined, {
-        databasePath,
+        databasePath: context.admission.databasePath,
         existingIdentity: context.admission.identity.key,
       }),
     );
@@ -293,7 +300,7 @@ it.each(["config.health.patch", "diagnostic.register"] as const)(
         first.execute({ type: "config.health.read", input: { artifactPreserving: false } }),
       ),
     ).toEqual({ state: { entries: {} }, basis: {} });
-    expect(isOpenClawStateDatabaseOpen(databasePath)).toBe(false);
+    expect(readFileSync(databasePath)).toEqual(initialBytes);
 
     const scope = "tests/health-native-borrow";
     const write = (backend: typeof first, key: string) =>

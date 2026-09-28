@@ -83,24 +83,11 @@ export function readDatabasePathIdentitySync(databasePath: string): DatabasePath
 /** Inspect retained aliases only while binding a newly observed database path. */
 export function findChangedDatabasePaths(
   paths: Iterable<string>,
-  previous: DatabasePathIdentity,
   observed: DatabasePathIdentity,
 ): string[] {
-  if (
-    previous.key !== observed.key ||
-    (previous.birthtime !== undefined &&
-      observed.birthtime !== undefined &&
-      previous.birthtime !== observed.birthtime)
-  ) {
-    return [...paths];
-  }
-  return [...paths].filter((pathname) => {
-    const current = inspectDatabasePathIdentitySync(pathname);
-    return (
-      current?.key !== observed.key ||
-      (observed.birthtime !== undefined && current.birthtime !== observed.birthtime)
-    );
-  });
+  return [...paths].filter(
+    (pathname) => inspectDatabasePathIdentitySync(pathname)?.key !== observed.key,
+  );
 }
 
 export async function readDatabasePathIdentity(

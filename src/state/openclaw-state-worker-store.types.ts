@@ -5,6 +5,7 @@ import type {
   getSqliteWorkerActorIdentity,
   SqliteWorkerStore,
 } from "../infra/sqlite-worker-store.js";
+import type { OpenClawStateDatabaseReadAdmission } from "./openclaw-state-db-async-lifecycle.js";
 import type { OpenClawStateWorkerContext } from "./openclaw-state-worker-context.types.js";
 import type {
   OpenClawStateWorkerOperations,
@@ -20,8 +21,7 @@ export type IdleTimer = ReturnType<typeof setTimeout> & { unref?: () => void };
 export type Entry = {
   source: ReturnType<typeof captureRuntimeWorkerSource>;
   context: OpenClawStateWorkerContext;
-  // Actor reuse retains physical lifetime; each request validates its own schema authority.
-  pathAdmission: OpenClawStateWorkerContext["admission"];
+  databaseAdmission: OpenClawStateDatabaseReadAdmission;
   opening: Promise<Store | undefined>;
   openingAdmission: ReturnType<typeof captureOpenClawStateWorkerOpeningGuard>["admission"];
   existingOnly: boolean;

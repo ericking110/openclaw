@@ -319,7 +319,7 @@ function createSharedStateWorkerOwner() {
           kind = "client";
         }
       }
-      entry.pathAdmission.assertCurrent();
+      entry.databaseAdmission.assertCurrent();
     } catch (error) {
       if (!isStateDatabaseReadAdmissionInvalidatedError(error)) {
         throw error;
@@ -347,10 +347,21 @@ function createSharedStateWorkerOwner() {
         throw invalid.error;
       }
       return {
-        pending: entry.actor
-          ? retireActor(entry.actor, entry.context.admission.identity)
-          : retire(entry),
+        pending: entry.opening.then(
+          () => {
+            if (hasActiveActorOperations(entry)) {
+              throw invalid.error;
+            }
+            return entry.actor
+              ? retireActor(entry.actor, entry.context.admission.identity)
+              : retire(entry);
+          },
+          () => retire(entry),
+        ),
       };
+    }
+    if (!stores.has(entry)) {
+      return undefined;
     }
     const closing = retire(entry);
     // The retirement owner joins this client after its callback can finish using healthy peers.
@@ -435,7 +446,7 @@ function createSharedStateWorkerOwner() {
       }
       let entry: Entry | undefined;
       for (;;) {
-        for (const candidate of stores) {
+        for (const candidate of new Set([...stores, ...retiring.keys()])) {
           if (!matches(candidate, admission.identity)) {
             continue;
           }
@@ -447,8 +458,9 @@ function createSharedStateWorkerOwner() {
             return this.open(context, options);
           }
           if (
-            candidate.context.existingSchemaPath !== context.existingSchemaPath ||
-            candidate.source.moduleUrl.href !== source.moduleUrl.href
+            stores.has(candidate) &&
+            (candidate.context.existingSchemaPath !== context.existingSchemaPath ||
+              candidate.source.moduleUrl.href !== source.moduleUrl.href)
           ) {
             await retire(candidate);
             assertAdmission();
@@ -515,6 +527,11 @@ function createSharedStateWorkerOwner() {
         }
       }
       if (!entry) {
+        assertAdmission();
+        // Retain the database generation separately from the caller's lexical
+        // schema scope, which may end while this actor remains reusable.
+        const databaseAdmission = captureOpenClawStateDatabaseReadAdmission(admission.databasePath);
+        assertAdmission();
         const openingGuard = captureOpenClawStateWorkerOpeningGuard(context, assertCurrent);
         const open = async () => {
           try {
@@ -541,7 +558,7 @@ function createSharedStateWorkerOwner() {
         const admitted: Entry = {
           source,
           context,
-          pathAdmission: captureOpenClawStateDatabaseReadAdmission(admission.databasePath),
+          databaseAdmission,
           openingAdmission: openingGuard.admission,
           existingOnly,
           activeOperations: 0,
