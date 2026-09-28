@@ -1,6 +1,6 @@
 import AVFoundation
 import Foundation
-import Observation
+import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -180,19 +180,18 @@ struct ChatMediaAudioAttachment: View {
 }
 
 @MainActor
-@Observable
-final class ChatMediaAudioPlayer: NSObject, ChatMediaNowPlayingOwner {
-    private(set) var isPlaying = false
-    private(set) var isPlaybackBlocked = false
-    private(set) var isUnavailable = false
-    private(set) var currentTime: TimeInterval = 0
+final class ChatMediaAudioPlayer: ObservableObject{
+    @Published private(set) var isPlaying = false
+    @Published private(set) var isPlaybackBlocked = false
+    @Published private(set) var isUnavailable = false
+    @Published private(set) var currentTime: TimeInterval = 0
     let duration: TimeInterval
 
-    @ObservationIgnored private let player: AVAudioPlayer
-    @ObservationIgnored private let title: String
-    @ObservationIgnored private let playbackAllowed: @MainActor @Sendable () -> Bool
-    @ObservationIgnored private var progressTask: Task<Void, Never>?
-    @ObservationIgnored private var ownsAudioSession = false
+    private let player: AVAudioPlayer
+    private let title: String
+    private let playbackAllowed: @MainActor @Sendable () -> Bool
+    private var progressTask: Task<Void, Never>?
+    private var ownsAudioSession = false
 
     init(
         media: OpenClawChatMediaData,
@@ -360,7 +359,7 @@ final class ChatMediaAudioPlayer: NSObject, ChatMediaNowPlayingOwner {
             options: [.notifyOthersOnDeactivation])
         #endif
     }
-}
+
 
 // SDK 27 imports AVAudioPlayerDelegate with compatible isolation. Older SDKs
 // still need the preconcurrency bridge for this main-actor implementation.

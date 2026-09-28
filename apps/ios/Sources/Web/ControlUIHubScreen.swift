@@ -75,7 +75,7 @@ enum ControlUIHubPage {
 /// Authenticated, origin-locked Desktop and Terminal pages share native chrome
 /// and the offline fallback; the page owns its route and reload identity.
 struct ControlUIHubScreen: View {
-    @Environment(NodeAppModel.self) private var appModel
+    @EnvironmentObject private var appModel: NodeAppModel
     let page: ControlUIHubPage
     var headerSidebarAction: OpenClawSidebarHeaderAction?
     var usesNativeNavigationChrome = false

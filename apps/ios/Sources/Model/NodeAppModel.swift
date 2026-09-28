@@ -1,5 +1,5 @@
 import CoreLocation
-import Observation
+import Combine
 import OpenClawChatUI
 import OpenClawKit
 import OpenClawProtocol
@@ -57,9 +57,8 @@ private enum GatewayConnectionWaitOwner {
 }
 
 @MainActor
-@Observable
 // swiftlint:disable type_body_length file_length
-final class NodeAppModel {
+final class NodeAppModel: ObservableObject {
     struct AgentDeepLinkPrompt: Identifiable, Equatable {
         let id: String
         let messagePreview: String
@@ -85,8 +84,8 @@ final class NodeAppModel {
         let pluginSeverity: String?
         // Discovery provenance is transient: cached approvals must rediscover their
         // source under the current operator before contributing session attention.
-        var attentionSource: ApprovalAttentionSource?
-        var createdAtMs: Double?
+        @Published var attentionSource: ApprovalAttentionSource?
+        @Published var createdAtMs: Double?
 
         private enum CodingKeys: String, CodingKey {
             case id, kind, gatewayStableID, commandText, commandPreview, warningText
@@ -199,7 +198,7 @@ final class NodeAppModel {
 
     private struct ExecApprovalResolutionAttemptState {
         let token: UUID
-        var writeInFlight: Bool
+        @Published var writeInFlight: Bool
     }
 
     private struct ExecApprovalUncertaintyState {
@@ -300,9 +299,9 @@ final class NodeAppModel {
     }
 
     private struct NodeGatewayLoopState: Sendable {
-        var attempt = 0
-        var options: GatewayConnectOptions
-        var didFallbackClientID = false
+        @Published var attempt = 0
+        @Published var options: GatewayConnectOptions
+        @Published var didFallbackClientID = false
     }
 
     private enum NodeGatewayLoopStep: Sendable {
@@ -326,12 +325,12 @@ final class NodeAppModel {
     }
 
     private struct PersistedWatchExecApprovalBridgeState: Codable {
-        var approvals: [ExecApprovalPrompt]
-        var pendingApprovalReadbacks: [PersistedExecApprovalReadback]?
-        var approvalUncertainties: [PersistedExecApprovalUncertainty]?
-        var pendingApprovalPushes: [ExecApprovalNotificationPrompt]?
-        var pendingResolvedPushes: [ExecApprovalNotificationPrompt]?
-        var pendingResolutions: [WatchExecApprovalResolveEvent]?
+        @Published var approvals: [ExecApprovalPrompt]
+        @Published var pendingApprovalReadbacks: [PersistedExecApprovalReadback]?
+        @Published var approvalUncertainties: [PersistedExecApprovalUncertainty]?
+        @Published var pendingApprovalPushes: [ExecApprovalNotificationPrompt]?
+        @Published var pendingResolvedPushes: [ExecApprovalNotificationPrompt]?
+        @Published var pendingResolutions: [WatchExecApprovalResolveEvent]?
     }
 
     private let deepLinkLogger = Logger(subsystem: "ai.openclawfoundation.app", category: "DeepLink")
@@ -357,9 +356,9 @@ final class NodeAppModel {
         case screenRecording
     }
 
-    var isBackgrounded: Bool = false
+    @Published var isBackgrounded: Bool = false
     private let camera: any CameraServicing
-    private(set) var preferredCameraFacing: OpenClawCameraFacing
+    @Published private(set) var preferredCameraFacing: OpenClawCameraFacing
     private let screenRecorder: any ScreenRecordingServicing
     private var watchGatewayConnectionStatus: OpenClawWatchAppStatusCode?
     var gatewayStatusText: String = "Offline" {
@@ -368,36 +367,36 @@ final class NodeAppModel {
         }
     }
 
-    var nodeStatusText: String = "Offline"
-    var operatorStatusText: String = "Offline"
-    private(set) var isAppleReviewDemoModeEnabled: Bool = false
-    private(set) var isScreenshotFixtureModeEnabled: Bool = false
+    @Published var nodeStatusText: String = "Offline"
+    @Published var operatorStatusText: String = "Offline"
+    @Published private(set) var isAppleReviewDemoModeEnabled: Bool = false
+    @Published private(set) var isScreenshotFixtureModeEnabled: Bool = false
     var isOperatorGatewayConnected: Bool {
         self.operatorConnected
     }
 
-    private(set) var isDesktopObserveAvailable: Bool = false
+    @Published private(set) var isDesktopObserveAvailable: Bool = false
 
     // Privileged requests must notice authority loss even if UI observation coalesces a reconnect.
-    private(set) var operatorAuthorityGeneration: UInt64 = 0
+    @Published private(set) var operatorAuthorityGeneration: UInt64 = 0
     private(set) var hasOperatorAdminScope: Bool = false {
         didSet {
             if oldValue != self.hasOperatorAdminScope { self.operatorAuthorityGeneration &+= 1 }
         }
     }
 
-    var gatewayServerName: String?
-    var gatewayRemoteAddress: String?
-    var connectedGatewayID: String?
-    var gatewayAutoReconnectEnabled: Bool = true
+    @Published var gatewayServerName: String?
+    @Published var gatewayRemoteAddress: String?
+    @Published var connectedGatewayID: String?
+    @Published var gatewayAutoReconnectEnabled: Bool = true
     // When the gateway requires pairing approval, we pause reconnect churn and show a stable UX.
     // Reconnect loops (both our own and the underlying WebSocket watchdog) can otherwise generate
     // multiple pending requests and cause the onboarding UI to "flip-flop".
-    var gatewayPairingPaused: Bool = false
-    var gatewayPairingRequestId: String?
+    @Published var gatewayPairingPaused: Bool = false
+    @Published var gatewayPairingRequestId: String?
     // Bumped on every non-nil assignment, including re-reports of an equal problem;
     // value equality alone cannot tell the UI to re-surface a dismissed toast.
-    private(set) var gatewayProblemReportCount = 0
+    @Published private(set) var gatewayProblemReportCount = 0
     private(set) var lastGatewayProblem: GatewayConnectionProblem? {
         didSet { if self.lastGatewayProblem != nil { self.gatewayProblemReportCount &+= 1 } }
     }
@@ -413,30 +412,30 @@ final class NodeAppModel {
 
     private var mainSessionBaseKey: String = "main"
     private var gatewaySessionScope: String?
-    var gatewayAccentColorHex: String?
+    @Published var gatewayAccentColorHex: String?
     private var focusedChatSessionKey: String?
-    var selectedAgentId: String?
-    var gatewayDefaultAgentId: String?
-    var gatewayAgents: [AgentSummary] = []
-    var lastShareEventText: String = "No share events yet."
-    var openChatRequestID: Int = 0
-    @ObservationIgnored private var consumedOpenChatRequestID: Int = 0
-    private(set) var pendingLiveVoiceStart = false
-    var liveVoiceStartError: String?
-    var newChatRequestID: Int = 0
+    @Published var selectedAgentId: String?
+    @Published var gatewayDefaultAgentId: String?
+    @Published var gatewayAgents: [AgentSummary] = []
+    @Published var lastShareEventText: String = "No share events yet."
+    @Published var openChatRequestID: Int = 0
+    private var consumedOpenChatRequestID: Int = 0
+    @Published private(set) var pendingLiveVoiceStart = false
+    @Published var liveVoiceStartError: String?
+    @Published var newChatRequestID: Int = 0
     // RootTabs has one chat destination; keep its acknowledgement here so recreating
     // that destination cannot replay a request that the prior view already handled.
-    @ObservationIgnored private var consumedNewChatRequestID: Int = 0
-    var dashboardNavigationRequestID: Int = 0
-    @ObservationIgnored private var consumedDashboardNavigationRequestID: Int = 0
-    var gatewaySetupRequestID: Int = 0
-    private(set) var pendingAgentDeepLinkPrompt: AgentDeepLinkPrompt?
+    private var consumedNewChatRequestID: Int = 0
+    @Published var dashboardNavigationRequestID: Int = 0
+    private var consumedDashboardNavigationRequestID: Int = 0
+    @Published var gatewaySetupRequestID: Int = 0
+    @Published private(set) var pendingAgentDeepLinkPrompt: AgentDeepLinkPrompt?
     private var pendingGatewaySetupLink: GatewayConnectDeepLink?
-    private(set) var pendingExecApprovalPrompt: ExecApprovalPrompt?
-    private(set) var pendingExecApprovalPromptResolving: Bool = false
-    private(set) var pendingExecApprovalPromptErrorText: String?
+    @Published private(set) var pendingExecApprovalPrompt: ExecApprovalPrompt?
+    @Published private(set) var pendingExecApprovalPromptResolving: Bool = false
+    @Published private(set) var pendingExecApprovalPromptErrorText: String?
     // A canonical applied:false winner keeps the prompt visible but freezes its actions.
-    private(set) var pendingExecApprovalPromptOutcome: ExecApprovalOutcome?
+    @Published private(set) var pendingExecApprovalPromptOutcome: ExecApprovalOutcome?
     var pendingExecApprovalPromptResolvedText: String? {
         self.pendingExecApprovalPromptOutcome?.text
     }
@@ -496,33 +495,33 @@ final class NodeAppModel {
 
     private var pendingExecApprovalPromptRequestGeneration: Int = 0
     private var pendingExecApprovalPromptSurfaceGeneration: UInt64 = 0
-    private(set) var pendingNotificationPermissionGuidancePrompt: NotificationPermissionGuidancePrompt?
+    @Published private(set) var pendingNotificationPermissionGuidancePrompt: NotificationPermissionGuidancePrompt?
     private var queuedAgentDeepLinkPrompt: AgentDeepLinkPrompt?
     private var lastAgentDeepLinkPromptAt: Date = .distantPast
-    @ObservationIgnored private var queuedAgentDeepLinkPromptTask: Task<Void, Never>?
+    private var queuedAgentDeepLinkPromptTask: Task<Void, Never>?
 
     /// Primary "node" connection: used for device capabilities and node.invoke requests.
     private let nodeGateway = GatewayNodeSession()
     // Secondary "operator" connection: used for chat/talk/config/voicewake requests.
     private let operatorGateway = GatewayNodeSession()
     private var nodeGatewayTask: Task<Void, Never>?
-    @ObservationIgnored private var nodeHostStatsTask: Task<Void, Never>?
+    private var nodeHostStatsTask: Task<Void, Never>?
     private var operatorGatewayTask: Task<Void, Never>?
-    @ObservationIgnored private var gatewaySessionResetTask: Task<Void, Never>?
-    @ObservationIgnored private var gatewaySessionResetGeneration: UInt64 = 0
-    @ObservationIgnored private var gatewayRouteGeneration: UInt64 = 0
-    @ObservationIgnored private var operatorTalkConnectionGeneration: UInt64 = 0
-    @ObservationIgnored private var operatorTalkHydrationGeneration: UInt64?
-    @ObservationIgnored private var credentialHandoffFailureGeneration: UInt64?
-    @ObservationIgnored private(set) var gatewayConnectGeneration: UInt64 = 0
+    private var gatewaySessionResetTask: Task<Void, Never>?
+    private var gatewaySessionResetGeneration: UInt64 = 0
+    private var gatewayRouteGeneration: UInt64 = 0
+    private var operatorTalkConnectionGeneration: UInt64 = 0
+    private var operatorTalkHydrationGeneration: UInt64?
+    private var credentialHandoffFailureGeneration: UInt64?
+    private(set) var gatewayConnectGeneration: UInt64 = 0
     private var forceOperatorTalkPermissionUpgradeRequest = false
-    @ObservationIgnored private var talkPermissionUpgradeTask: Task<Void, Never>?
-    @ObservationIgnored private var talkPermissionUpgradeReconnectTask: Task<Void, Never>?
+    private var talkPermissionUpgradeTask: Task<Void, Never>?
+    private var talkPermissionUpgradeReconnectTask: Task<Void, Never>?
     private var talkPermissionUpgradeReconnectGeneration: UInt64 = 0
     private var lastTalkPermissionReconnectAttemptAt: Date?
     private var voiceWakeSyncTask: Task<Void, Never>?
-    @ObservationIgnored private var cameraHUDDismissTask: Task<Void, Never>?
-    @ObservationIgnored private var cameraHUDOwnerID: String?
+    private var cameraHUDDismissTask: Task<Void, Never>?
+    private var cameraHUDOwnerID: String?
     private typealias CapabilityHandler = @MainActor @Sendable (NodeAppModel, BridgeInvokeRequest) async throws
         -> BridgeInvokeResponse
     private static let capabilityHandlers = NodeAppModel.buildCapabilityHandlers()
@@ -532,7 +531,7 @@ final class NodeAppModel {
     let voiceWake = VoiceWakeManager()
     let voiceNoteRecorder: OpenClawVoiceNoteRecorder
     let talkMode: TalkModeManager
-    private(set) var locationAuthorizationSnapshot = LocationAuthorizationSnapshot.undetermined
+    @Published private(set) var locationAuthorizationSnapshot = LocationAuthorizationSnapshot.undetermined
     private let locationService: any LocationServicing
     private let deviceStatusService: any DeviceStatusServicing
     private let photosService: any PhotosServicing
@@ -543,35 +542,35 @@ final class NodeAppModel {
     private let healthSummaryService: any HealthSummaryServicing
     private let watchMessagingService: any WatchMessagingServicing
     #if DEBUG
-    @ObservationIgnored var testAgentRequestHandler: ((AgentDeepLink) async throws -> Void)?
-    @ObservationIgnored var testTalkCapturePreparationHandler: (() async -> Void)?
-    @ObservationIgnored var testTalkCaptureStartedHandler: (() async -> Void)?
-    @ObservationIgnored var testChatSessionRoutingRestoreHandler: (() async -> Void)?
-    @ObservationIgnored private var testExecApprovalPromptFetchHandler:
+    var testAgentRequestHandler: ((AgentDeepLink) async throws -> Void)?
+    var testTalkCapturePreparationHandler: (() async -> Void)?
+    var testTalkCaptureStartedHandler: (() async -> Void)?
+    var testChatSessionRoutingRestoreHandler: (() async -> Void)?
+    private var testExecApprovalPromptFetchHandler:
         ((String, String) async -> ExecApprovalPromptFetchOutcome)?
-    @ObservationIgnored private var testApprovalInboxListHandler: ((String) async throws -> Data)?
-    @ObservationIgnored private var testExecApprovalResolutionHandler:
+    private var testApprovalInboxListHandler: ((String) async throws -> Data)?
+    private var testExecApprovalResolutionHandler:
         ((String, ApprovalKind, String, String) async -> ExecApprovalResolutionOutcome)?
-    @ObservationIgnored private var testExecApprovalResolutionReconcilesUnknownAck = false
+    private var testExecApprovalResolutionReconcilesUnknownAck = false
     #endif
     private var pttVoiceWakeLeaseCaptureId: String?
     private var chatDictationCaptureId: String?
-    var talkPttCommandEpoch: UInt64 = 0
+    @Published var talkPttCommandEpoch: UInt64 = 0
     private var chatDictationCommandEpoch: UInt64 = 0
-    private(set) var isChatDictationPending = false
+    @Published private(set) var isChatDictationPending = false
     private var talkPreparationInFlight = false
     private var auxiliaryAudioCapture: AuxiliaryAudioCapture?
     private var foregroundCaptureCancellations: [UUID: @MainActor () -> Void] = [:]
-    var talkPreparationWaiters: [(id: UUID, continuation: CheckedContinuation<Bool, Never>)] = []
+    @Published var talkPreparationWaiters: [(id: UUID, continuation: CheckedContinuation<Bool, Never>)] = []
     private var backgroundTalkKeptActive = false
     private var backgroundedAt: Date?
     private var reconnectAfterBackgroundArmed = false
     private var backgroundGraceTaskID: UIBackgroundTaskIdentifier = .invalid
-    @ObservationIgnored private var backgroundGraceTaskTimer: Task<Void, Never>?
-    var backgroundReconnectSuppressed = false
+    private var backgroundGraceTaskTimer: Task<Void, Never>?
+    @Published var backgroundReconnectSuppressed = false
     private var backgroundReconnectLeaseUntil: Date?
-    @ObservationIgnored private var foregroundGatewayResumeCheckTask: Task<Void, Never>?
-    @ObservationIgnored private var foregroundGatewayResumeGeneration: UInt64 = 0
+    private var foregroundGatewayResumeCheckTask: Task<Void, Never>?
+    private var foregroundGatewayResumeGeneration: UInt64 = 0
     private var foregroundGatewayResumeCheckInFlight: Bool {
         self.foregroundGatewayResumeCheckTask != nil
     }
@@ -583,37 +582,37 @@ final class NodeAppModel {
         self.watchChatStorageWarning ?? self.watchChatAdmissionWarning
     }
 
-    @ObservationIgnored private var watchReplyCoordinator: WatchReplyCoordinator?
-    @ObservationIgnored private var preparedWatchJournal: OpenClawWatchMessageJournal?
-    @ObservationIgnored private let appleReviewDemoChatTransport = LocalFixtureChatTransport(fixture: .appleReviewDemo)
-    @ObservationIgnored private var clientDatabases: OpenClawClientDatabases?
-    @ObservationIgnored private var chatTranscriptCachesByGatewayID:
+    private var watchReplyCoordinator: WatchReplyCoordinator?
+    private var preparedWatchJournal: OpenClawWatchMessageJournal?
+    private let appleReviewDemoChatTransport = LocalFixtureChatTransport(fixture: .appleReviewDemo)
+    private var clientDatabases: OpenClawClientDatabases?
+    private var chatTranscriptCachesByGatewayID:
         [GatewayStableIdentifier.Key: OpenClawChatSQLiteTranscriptCache] = [:]
-    @ObservationIgnored var chatSessionRoutingRestoreTask: Task<Void, Never>?
+    var chatSessionRoutingRestoreTask: Task<Void, Never>?
     private var watchExecApprovalPromptsByID: [ExecApprovalIdentifier.Key: ExecApprovalPrompt] = [:]
     private var execApprovalInboxPromptsByKey: [ExecApprovalInboxKey: ExecApprovalPrompt] = [:]
-    @ObservationIgnored private var approvalInboxRefreshGeneration: UInt64 = 0
-    @ObservationIgnored private var approvalInboxEventRefreshTask: Task<Void, Never>?
-    @ObservationIgnored private var approvalInboxExpiryTask: Task<Void, Never>?
+    private var approvalInboxRefreshGeneration: UInt64 = 0
+    private var approvalInboxEventRefreshTask: Task<Void, Never>?
+    private var approvalInboxExpiryTask: Task<Void, Never>?
     private var dismissedExecApprovalPresentationKeys: Set<ExecApprovalInboxKey> = []
     private var terminalExecApprovalKeys: Set<ExecApprovalInboxKey> = []
-    @ObservationIgnored private var terminalExecApprovalKeyOrder: [ExecApprovalInboxKey] = []
-    @ObservationIgnored private var resettableWatchResolutionAttempts:
+    private var terminalExecApprovalKeyOrder: [ExecApprovalInboxKey] = []
+    private var resettableWatchResolutionAttempts:
         [ExecApprovalInboxKey: [ExactOpaqueIdentifierKey: String]] = [:]
     private var pendingPersistedExecApprovalReadbacks: [PersistedExecApprovalReadback] = []
-    @ObservationIgnored private var activeExecApprovalResolutionAttempts:
+    private var activeExecApprovalResolutionAttempts:
         [ExecApprovalInboxKey: ExecApprovalResolutionAttemptState] = [:]
-    @ObservationIgnored private var execApprovalUncertainties:
+    private var execApprovalUncertainties:
         [ExecApprovalInboxKey: ExecApprovalUncertaintyState] = [:]
-    @ObservationIgnored private var pendingWatchExecApprovalResolutionFlushInFlight = false
-    var pendingWatchExecApprovalRecoveryPushes: [ExecApprovalNotificationPrompt] = []
-    var pendingExecApprovalResolvedPushes: [ExecApprovalNotificationPrompt] = []
+    private var pendingWatchExecApprovalResolutionFlushInFlight = false
+    @Published var pendingWatchExecApprovalRecoveryPushes: [ExecApprovalNotificationPrompt] = []
+    @Published var pendingExecApprovalResolvedPushes: [ExecApprovalNotificationPrompt] = []
     private var pendingWatchExecApprovalResolutions: [WatchExecApprovalResolveEvent] = []
     private var pendingForegroundActionDrainInFlight = false
     private var pendingForegroundActionDrainRequested = false
     private var completedPendingForegroundActionIDsByGateway: [String: Set<String>] = [:]
 
-    var gatewayConnected = false
+    @Published var gatewayConnected = false
     private var operatorConnected = false {
         didSet {
             if oldValue != self.operatorConnected { self.operatorAuthorityGeneration &+= 1 }
@@ -625,7 +624,7 @@ final class NodeAppModel {
     private var apnsDeviceTokenHex: String?
     private var apnsLastRegisteredTokenHex: String?
     private var apnsLastRegisteredGatewayStableID: String?
-    @ObservationIgnored private let pushRegistrationManager = PushRegistrationManager()
+    private let pushRegistrationManager = PushRegistrationManager()
 
     var operatorSession: GatewayNodeSession {
         self.operatorGateway
@@ -728,7 +727,7 @@ final class NodeAppModel {
     /// Chat and the persistent sidebar consume the same Gateway-scoped request lifecycle.
     let chatPresentation = IOSChatViewModelOwner()
     /// Request admission only; the connection controller owns the later handoff.
-    var isGatewayPickerRequestInFlight = false
+    @Published var isGatewayPickerRequestInFlight = false
 
     /// Stable owner key for the long-lived chat view model. Connectivity still
     /// changes `chatViewModelIdentityID` for session-list refreshes, but must
@@ -745,7 +744,7 @@ final class NodeAppModel {
     private var chatTranscriptCacheGeneration = 0
     private var quarantinedChatOfflineGatewayIDs: Set<GatewayStableIdentifier.Key> = []
     #if DEBUG
-    @ObservationIgnored var testRemoveAllChatDatabaseFilesHandler: (() throws -> Void)?
+    var testRemoveAllChatDatabaseFilesHandler: (() throws -> Void)?
     #endif
 
     /// Gateway-scoped facade over the installation-wide cache and client-state
@@ -1012,11 +1011,11 @@ final class NodeAppModel {
     private static let preferredCameraFacingKey = "camera.preferredFacing"
     private static let foregroundResumeHealthTimeoutSeconds = 1
 
-    var cameraHUDText: String?
-    var cameraHUDKind: CameraHUDKind?
-    var cameraFlashNonce: Int = 0
-    var screenRecordActive: Bool = false
-    private(set) var watchMessagingStatus = WatchMessagingStatus(
+    @Published var cameraHUDText: String?
+    @Published var cameraHUDKind: CameraHUDKind?
+    @Published var cameraFlashNonce: Int = 0
+    @Published var screenRecordActive: Bool = false
+    @Published private(set) var watchMessagingStatus = WatchMessagingStatus(
         supported: false,
         paired: false,
         appInstalled: false,
@@ -1222,7 +1221,7 @@ final class NodeAppModel {
                 registeredGatewayIDs: registeredGatewayIDs)
             self.endBackgroundConnectionGracePeriod(reason: "scene_foreground")
             self.clearBackgroundReconnectSuppression(reason: "scene_foreground")
-            var shouldStartGatewayHealthMonitor = self.operatorConnected
+            @Published var shouldStartGatewayHealthMonitor = self.operatorConnected
             self.voiceWake.setSuppressedForBackground(false)
             let keptActive = self.backgroundTalkKeptActive
             self.backgroundTalkKeptActive = false
@@ -2074,7 +2073,7 @@ final class NodeAppModel {
             gatewayStableID: event.gatewayStableID),
             let attemptKey = ExactOpaqueIdentifier.key(event.replyId)
         else { return }
-        var attempts = self.resettableWatchResolutionAttempts[key] ?? [:]
+        @Published var attempts = self.resettableWatchResolutionAttempts[key] ?? [:]
         attempts[attemptKey] = event.replyId
         if attempts.count > 8,
            let evictedKey = attempts.keys.min(by: { lhs, rhs in
@@ -2290,7 +2289,7 @@ final class NodeAppModel {
         gatewayStableID: String?) -> BridgeInvokeRequest
     {
         guard req.command == OpenClawWatchCommand.notify.rawValue,
-              var params = try? decodeParams(OpenClawWatchNotifyParams.self, from: req.paramsJSON)
+              @Published var params = try? decodeParams(OpenClawWatchNotifyParams.self, from: req.paramsJSON)
         else { return req }
         // Gateway identity comes from the installed node route, never the request payload.
         params.gatewayStableID = GatewayStableIdentifier.exact(gatewayStableID)
@@ -2362,7 +2361,7 @@ final class NodeAppModel {
         case OpenClawCameraCommand.list.rawValue:
             let devices = await camera.listDevices()
             struct Payload: Codable {
-                var devices: [CameraController.CameraDeviceInfo]
+                @Published var devices: [CameraController.CameraDeviceInfo]
             }
             let payload = try Self.encodePayload(Payload(devices: devices))
             return BridgeInvokeResponse(id: req.id, ok: true, payloadJSON: payload)
@@ -2379,10 +2378,10 @@ final class NodeAppModel {
             }
 
             struct Payload: Codable {
-                var format: String
-                var base64: String
-                var width: Int
-                var height: Int
+                @Published var format: String
+                @Published var base64: String
+                @Published var width: Int
+                @Published var height: Int
             }
             try Task.checkCancellation()
             let payload = try Self.encodePayload(Payload(
@@ -2409,10 +2408,10 @@ final class NodeAppModel {
             }
 
             struct Payload: Codable {
-                var format: String
-                var base64: String
-                var durationMs: Int
-                var hasAudio: Bool
+                @Published var format: String
+                @Published var base64: String
+                @Published var durationMs: Int
+                @Published var hasAudio: Bool
             }
             try Task.checkCancellation()
             let payload = try Self.encodePayload(Payload(
@@ -2458,12 +2457,12 @@ final class NodeAppModel {
             return try Data(contentsOf: URL(fileURLWithPath: path))
         }
         struct Payload: Codable {
-            var format: String
-            var base64: String
-            var durationMs: Int?
-            var fps: Double?
-            var screenIndex: Int?
-            var hasAudio: Bool
+            @Published var format: String
+            @Published var base64: String
+            @Published var durationMs: Int?
+            @Published var fps: Double?
+            @Published var screenIndex: Int?
+            @Published var hasAudio: Bool
         }
         let payload = try Self.encodePayload(Payload(
             format: "mp4",
@@ -2645,7 +2644,7 @@ final class NodeAppModel {
         switch req.command {
         case OpenClawTalkCommand.pttStart.rawValue:
             let commandEpoch = self.talkPttCommandEpoch
-            var reservedCaptureId: String?
+            @Published var reservedCaptureId: String?
             do {
                 let payload = try await self.withTalkCapturePreparation(
                     owner: .remotePushToTalk(epoch: commandEpoch))
@@ -2677,7 +2676,7 @@ final class NodeAppModel {
             }
         case OpenClawTalkCommand.pttOnce.rawValue:
             let commandEpoch = self.talkPttCommandEpoch
-            var reservedCaptureId: String?
+            @Published var reservedCaptureId: String?
             let start: TalkPushToTalkOnceStart
             do {
                 start = try await self.withTalkCapturePreparation(
@@ -2729,7 +2728,7 @@ final class NodeAppModel {
         defer { self.isChatDictationPending = false }
 
         let commandEpoch = self.chatDictationCommandEpoch
-        var reservedCaptureId: String?
+        @Published var reservedCaptureId: String?
         let start: TalkPushToTalkOnceStart
         do {
             start = try await self.withTalkCapturePreparation(

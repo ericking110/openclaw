@@ -1,7 +1,7 @@
 import SwiftUI
 
 private struct ExecApprovalPromptDialogModifier: ViewModifier {
-    @Environment(NodeAppModel.self) private var appModel: NodeAppModel
+    @EnvironmentObject private var appModel: NodeAppModel: NodeAppModel
     @AccessibilityFocusState private var approvalCardFocused: Bool
     let suppressedApproval: NodeAppModel.ExecApprovalInboxKey?
 
@@ -56,7 +56,7 @@ private struct ExecApprovalPromptDialogModifier: ViewModifier {
                 .zIndex(1)
             }
         }
-        .onChange(of: self.presentedPromptKey) { _, key in
+        .onChange(of: self.presentedPromptKey) { key in
             self.approvalCardFocused = key != nil
         }
         .animation(.easeInOut(duration: 0.18), value: self.presentedPromptKey)
@@ -327,7 +327,7 @@ private struct ExecApprovalPromptCard: View {
 }
 
 struct ApprovalDashboardReviewButton: View {
-    @Environment(NodeAppModel.self) private var appModel
+    @EnvironmentObject private var appModel: NodeAppModel
     @State private var isPresented = false
     @State private var authorityGeneration: UInt64?
     let prompt: NodeAppModel.ExecApprovalPrompt
@@ -360,7 +360,7 @@ struct ApprovalDashboardReviewButton: View {
                     onClose: { self.isPresented = false })
             }
         }
-        .onChange(of: self.appModel.operatorAuthorityGeneration) { _, _ in
+        .onChange(of: self.appModel.operatorAuthorityGeneration) { _ in
             self.isPresented = false
         }
     }

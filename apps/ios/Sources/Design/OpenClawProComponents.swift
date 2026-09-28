@@ -545,7 +545,7 @@ struct OpenClawProMark: View {
 }
 
 struct OpenClawGatewayCompactPill: View {
-    @Environment(NodeAppModel.self) private var appModel
+    @EnvironmentObject private var appModel: NodeAppModel
 
     var body: some View {
         OpenClawStatusBadge(label: .verbatim(self.title), tone: self.tone)

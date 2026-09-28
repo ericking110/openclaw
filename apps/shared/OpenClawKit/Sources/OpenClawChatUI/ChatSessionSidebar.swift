@@ -13,7 +13,7 @@ extension ChatSessionSidebarModel.Node {
 
 @MainActor
 struct ChatSessionSidebar: View {
-    @Bindable var viewModel: OpenClawChatViewModel
+    @ObservedObject var viewModel: OpenClawChatViewModel
     @Binding var query: String
     @Binding var groups: [OpenClawChatSessionGroup]
     let previews: ChatSessionSidebarPreviews
@@ -130,9 +130,10 @@ struct ChatSessionSidebar: View {
             placement: .sidebar,
             prompt: String(localized: "Search threads"))
         .safeAreaInset(edge: .bottom, spacing: 0) { self.connectionFooter }
-        .onChange(of: self.viewModel.sessions.map(\.key), initial: true) { _, keys in
+        .onChange(of: self.viewModel.sessions.map(\.key)) { keys in
             self.observedOrder.observe(keys)
         }
+        .onAppear { self.observedOrder.observe(self.viewModel.sessions.map(\.key)) }
         .task(id: previewRequest) {
             let model = self.viewModel
             let cache = model.transcriptCache
@@ -150,8 +151,8 @@ struct ChatSessionSidebar: View {
                 self.groupLoadFailed = true
             }
         }
-        .onChange(of: self.viewModel.healthOK) { previous, current in
-            if !previous, current {
+        .onChange(of: self.viewModel.healthOK) { current in
+            if current {
                 self.viewModel.refreshSessions(limit: 200)
             }
         }

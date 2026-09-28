@@ -1,4 +1,4 @@
-import Observation
+import Combine
 import SwiftUI
 
 @MainActor
@@ -20,7 +20,7 @@ public struct ChatSessionsSheet: View {
         }
     }
 
-    @Bindable var viewModel: OpenClawChatViewModel
+    @ObservedObject var viewModel: OpenClawChatViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
     @State private var scope: SessionScope = .active

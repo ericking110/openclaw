@@ -1,5 +1,5 @@
 import Foundation
-import Observation
+import Combine
 
 public enum OpenClawChatPermissionMode: String, Codable, CaseIterable, Hashable, Sendable {
     case readOnly = "read-only"
@@ -199,8 +199,7 @@ public struct OpenClawChatComposerCapabilityCatalog: Equatable, Sendable {
 }
 
 @MainActor
-@Observable
-final class OpenClawChatComposerCapabilityState {
+final class OpenClawChatComposerCapabilityState: ObservableObject{
     enum Phase: Equatable {
         case idle
         case loading
@@ -208,12 +207,12 @@ final class OpenClawChatComposerCapabilityState {
         case failed
     }
 
-    var ownerID = ""
-    var loadGeneration: UInt64 = 0
-    var mutationGeneration: UInt64 = 0
-    var phase = Phase.idle
-    var catalog = OpenClawChatComposerCapabilityCatalog()
-    var isMutating = false
-    var notice: String?
-    var errorMessage: String?
-}
+    @Published var ownerID = ""
+    @Published var loadGeneration: UInt64 = 0
+    @Published var mutationGeneration: UInt64 = 0
+    @Published var phase = Phase.idle
+    @Published var catalog = OpenClawChatComposerCapabilityCatalog()
+    @Published var isMutating = false
+    @Published var notice: String?
+    @Published var errorMessage: String?
+

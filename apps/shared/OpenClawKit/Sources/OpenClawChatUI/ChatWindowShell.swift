@@ -1,23 +1,29 @@
 #if os(macOS)
 import AppKit
-import Observation
+import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 
 /// Window-local presentation commands shared with the app menu. Gateway/session
 /// operations remain on the chat view model owned by that same window.
 @MainActor
-@Observable
-public final class OpenClawChatWindowCommands {
-    public var isCommandPalettePresented = false
-    var composerFocusRequest = 0
-    var findRequest = 0
+public final class OpenClawChatWindowCommands: ObservableObject{
+    @Published public var isCommandPalettePresented = false
+    @Published var composerFocusRequest = 0
+    @Published var findRequest = 0
 
     public init() {}
+
+
+private struct OpenClawChatWindowCommandsKey: EnvironmentKey {
+    static let defaultValue: OpenClawChatWindowCommands? = nil
 }
 
 extension EnvironmentValues {
-    @Entry var openClawChatWindowCommands: OpenClawChatWindowCommands?
+    var openClawChatWindowCommands: OpenClawChatWindowCommands? {
+        get { self[OpenClawChatWindowCommandsKey.self] }
+        set { self[OpenClawChatWindowCommandsKey.self] = newValue }
+    }
 }
 
 /// Native macOS chat window with a sessions sidebar and conversation toolbar.

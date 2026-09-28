@@ -13,8 +13,8 @@ enum GatewayConnectionAttempt: Equatable {
 }
 
 struct SettingsProTab: View {
-    @Environment(NodeAppModel.self) var appModel
-    @Environment(GatewayConnectionController.self) var gatewayController
+    @EnvironmentObject var appModel: NodeAppModel
+    @EnvironmentObject var gatewayController: GatewayConnectionController
     @Environment(\.scenePhase) var scenePhase
     @AppStorage("node.displayName") var displayName: String = "iOS Node"
     @AppStorage("node.instanceId") var instanceId: String = UUID().uuidString
@@ -147,34 +147,34 @@ struct SettingsProTab: View {
                 self.scannerResultHandoff.cancel()
                 self.pendingTargetSuppression.resumeAutoConnect(controller: self.gatewayController)
             }
-            .onChange(of: self.gatewaySetupRequest?.id) { _, _ in
+            .onChange(of: self.gatewaySetupRequest?.id) { _ in
                 self.applyGatewaySetupRequestIfNeeded()
             }
-            .onChange(of: self.scenePhase) { _, phase in
+            .onChange(of: self.scenePhase) { phase in
                 if phase == .active {
                     self.syncSettingsState()
                     self.refreshNotificationSettings()
                 }
             }
-            .onChange(of: self.selectedAgentPickerId) { _, newValue in
+            .onChange(of: self.selectedAgentPickerId) { newValue in
                 let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
                 self.appModel.setSelectedAgentId(trimmed.isEmpty ? nil : trimmed)
             }
-            .onChange(of: self.appModel.selectedAgentId ?? "") { _, newValue in
+            .onChange(of: self.appModel.selectedAgentId ?? "") { newValue in
                 if newValue != self.selectedAgentPickerId {
                     self.selectedAgentPickerId = newValue
                 }
             }
-            .onChange(of: self.setupCode) { _, newValue in
+            .onChange(of: self.setupCode) { newValue in
                 if !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     self.clearStagedGatewaySetupLink()
                 }
             }
-            .onChange(of: self.acceptsGatewaySetupRequests) { _, acceptsRequests in
+            .onChange(of: self.acceptsGatewaySetupRequests) { acceptsRequests in
                 guard acceptsRequests else { return }
                 self.applyGatewaySetupRequestIfNeeded()
             }
-            .onChange(of: self.onboardingRequestID) { _, _ in
+            .onChange(of: self.onboardingRequestID) { _ in
                 // Root-owned resets leave Settings mounted behind onboarding.
                 // Reload cleared credentials before the view can persist stale state.
                 self.syncAfterOnboardingReset()

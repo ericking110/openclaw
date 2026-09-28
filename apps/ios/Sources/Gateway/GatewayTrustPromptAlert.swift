@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct GatewayTrustPromptAlert: ViewModifier {
-    @Environment(GatewayConnectionController.self) private var gatewayController: GatewayConnectionController
+    @EnvironmentObject private var gatewayController: GatewayConnectionController: GatewayConnectionController
     let isEnabled: Bool
 
     func body(content: Content) -> some View {

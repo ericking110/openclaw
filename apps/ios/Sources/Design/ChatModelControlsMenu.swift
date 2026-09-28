@@ -1,4 +1,3 @@
-import Observation
 import OpenClawChatUI
 import SwiftUI
 
@@ -258,7 +257,7 @@ private struct ChatModelProviderIcon: View {
 
 @MainActor
 struct ChatModelControlsMenuItems: View {
-    @Bindable var viewModel: OpenClawChatViewModel
+    @ObservedObject var viewModel: OpenClawChatViewModel
     let agentModelReference: String?
     let onSelection: @MainActor () -> Void
     @State private var expandedProviderIDs: Set<String> = []

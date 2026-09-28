@@ -700,11 +700,11 @@ struct OpenClawApp: App {
             RootTabs()
                 .tint(OpenClawBrand.accent)
                 .font(OpenClawType.body)
-                .environment(self.appearanceModel)
+                .environmentObject(self.appearanceModel)
                 .preferredColorScheme(self.appearanceModel.preference.colorScheme)
-                .environment(self.appModel)
-                .environment(self.appModel.voiceWake)
-                .environment(self.gatewayController)
+                .environmentObject(self.appModel)
+                .environmentObject(self.appModel.voiceWake)
+                .environmentObject(self.gatewayController)
                 .task {
                     if !Self.screenshotModeEnabled {
                         self.voiceLiveActivityCoordinator.start(appModel: self.appModel)
@@ -730,7 +730,7 @@ struct OpenClawApp: App {
                     // that arrive before the scene has installed its model.
                     Task { await self.appDelegate.handleOpenURL(url, model: self.appModel) }
                 }
-                .onChange(of: self.scenePhase) { _, newValue in
+                .onChange(of: self.scenePhase) { newValue in
                     self.appModel.setScenePhase(newValue)
                     self.gatewayController.setScenePhase(newValue)
                     self.appDelegate.scenePhaseChanged(newValue)

@@ -1,6 +1,6 @@
 import CoreTransferable
 import Foundation
-import Observation
+import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -84,7 +84,7 @@ struct OpenClawChatComposer: View {
     @Environment(\.openClawChatDesktopLayout) private var isDesktopLayout
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
-    @Bindable var viewModel: OpenClawChatViewModel
+    @ObservedObject var viewModel: OpenClawChatViewModel
     let style: OpenClawChatView.Style
     let showsSessionSwitcher: Bool
     let userAccent: Color?
@@ -199,7 +199,7 @@ struct OpenClawChatComposer: View {
                 OpenClawChatModelSignInSheet(context: context) { await self.viewModel.refreshModelSignIn() }
             }
         }
-        .onChange(of: self.presentationOwner) { _, _ in
+        .onChange(of: self.presentationOwner) { _ in
                 self.invalidateModelSignIn()
             }
             .onDisappear { self.invalidateModelSignIn() }
@@ -285,20 +285,20 @@ struct OpenClawChatComposer: View {
                 self.shouldFocusTextView = true
                 self.viewModel.loadSlashCommandsIfNeeded()
             }
-            .onChange(of: self.focusRequest) { _, _ in
+            .onChange(of: self.focusRequest) { _ in
                 self.shouldFocusTextView = true
             }
     }
     #else
     private var platformComposer: some View {
         self.styledComposer
-            .onChange(of: self.isComposerEnabled) { _, isEnabled in
+            .onChange(of: self.isComposerEnabled) { isEnabled in
                 if !isEnabled {
                     self.isFocused = false
                     self.setSlashPanelPresented(false)
                 }
             }
-            .onChange(of: self.isAttachmentInputEnabled) { _, isEnabled in
+            .onChange(of: self.isAttachmentInputEnabled) { isEnabled in
                 if !isEnabled {
                     self.dismissAttachmentCapture()
                 }
@@ -320,7 +320,7 @@ struct OpenClawChatComposer: View {
                 selection: self.$pickerItems,
                 maxSelectionCount: 8,
                 matching: .any(of: [.images, .videos]))
-            .onChange(of: self.pickerItems) { _, items in
+            .onChange(of: self.pickerItems) { items in
                 guard !items.isEmpty else { return }
                 let owner = self.photoPickerOwner
                 self.photoPickerOwner = nil
@@ -344,14 +344,14 @@ struct OpenClawChatComposer: View {
 
     private var recorderLifecycleComposer: some View {
         self.platformComposer
-            .onChange(of: self.voiceNoteControl?.recorder.completedRecording) { _, recording in
+            .onChange(of: self.voiceNoteControl?.recorder.completedRecording) { recording in
                 guard recording != nil else { return }
                 self.stageCompletedVoiceNoteIfNeeded()
             }
-            .onChange(of: self.voiceNoteControl?.recorder.ownsPendingChatAttachment) { _, _ in
+            .onChange(of: self.voiceNoteControl?.recorder.ownsPendingChatAttachment) { _ in
                 self.viewModel.attachmentOwnerActivityChanged()
             }
-            .onChange(of: self.voiceNoteControl?.recorder.errorMessage) { _, message in
+            .onChange(of: self.voiceNoteControl?.recorder.errorMessage) { message in
                 if let message {
                     self.viewModel.errorText = message
                 }
@@ -360,10 +360,10 @@ struct OpenClawChatComposer: View {
 
     private var lifecycleComposer: some View {
         self.recorderLifecycleComposer
-            .onChange(of: ObjectIdentifier(self.viewModel)) { _, _ in
+            .onChange(of: ObjectIdentifier(self.viewModel)) { _ in
                 self.viewModel.loadSlashCommandsIfNeeded()
             }
-            .onChange(of: self.presentationOwner) { _, _ in
+            .onChange(of: self.presentationOwner) { _ in
                 ChatDictationActions.cancel(task: self.$dictationTask, control: self.dictationControl)
                 #if !os(macOS)
                 self.dismissAttachmentCapture()
@@ -887,7 +887,7 @@ struct OpenClawChatComposer: View {
                 })
                 .padding(.horizontal, 4)
                 .padding(.vertical, self.usesDesktopModelMenu ? 0 : 3)
-                .onChange(of: self.viewModel.input) { _, _ in
+                .onChange(of: self.viewModel.input) { _ in
                     self.updateSlashPopoverPresentation()
                 }
             #elseif os(iOS)
@@ -906,10 +906,10 @@ struct OpenClawChatComposer: View {
                 onHistoryDown: { !self.isSlashPopoverPresented && self.inputModel?.recallNextInput() == true })
                 .padding(.horizontal, self.cleanFieldTextInset)
                 .padding(.vertical, self.composerChrome == .clean ? 0 : 6)
-                .onChange(of: self.viewModel.input) { _, _ in
+                .onChange(of: self.viewModel.input) { _ in
                     self.updateSlashPopoverPresentation()
                 }
-                .onChange(of: self.isFocused) { _, focused in
+                .onChange(of: self.isFocused) { focused in
                     if focused {
                         self.updateSlashPopoverPresentation()
                     } else {
@@ -933,10 +933,10 @@ struct OpenClawChatComposer: View {
                 .focused(self.$isFocused)
                 .disabled(!self.isComposerEnabled)
                 .accessibilityIdentifier("chat-message-input")
-                .onChange(of: self.viewModel.input) { _, _ in
+                .onChange(of: self.viewModel.input) { _ in
                     self.updateSlashPopoverPresentation()
                 }
-                .onChange(of: self.isFocused) { _, focused in
+                .onChange(of: self.isFocused) { focused in
                     if focused {
                         self.updateSlashPopoverPresentation()
                     } else {
@@ -1042,7 +1042,7 @@ extension OpenClawChatComposer {
                         }
                         .padding(8)
                     }
-                    .onChange(of: self.slashHighlightIndex) { _, index in
+                    .onChange(of: self.slashHighlightIndex) { index in
                         proxy.scrollTo(index)
                     }
                 }

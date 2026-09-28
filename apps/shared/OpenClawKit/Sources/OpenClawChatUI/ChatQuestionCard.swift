@@ -1,5 +1,5 @@
 import Foundation
-import Observation
+import Combine
 import OpenClawKit
 import OpenClawProtocol
 import SwiftUI
@@ -15,8 +15,7 @@ public enum OpenClawQuestionCardStatus: Sendable, Equatable {
 }
 
 @MainActor
-@Observable
-public final class OpenClawQuestionCardModel: Identifiable {
+public final class OpenClawQuestionCardModel: ObservableObject{
     public let id: String
     public private(set) var record: QuestionRecord {
         didSet { self.discardTerminalDrafts() }
@@ -36,7 +35,7 @@ public final class OpenClawQuestionCardModel: Identifiable {
         didSet { self.discardTerminalDrafts() }
     }
 
-    private var allowedHostsDraft: String?
+    @Published private var allowedHostsDraft: String?
 
     public init(record: QuestionRecord) {
         self.id = record.id
@@ -101,7 +100,7 @@ public final class OpenClawQuestionCardModel: Identifiable {
               question.options.contains(where: { $0.label == label }),
               self.status() == .pending
         else { return }
-        var selected = self.selectedOptions[questionID] ?? []
+        @Published var selected = self.selectedOptions[questionID] ?? []
         if question.multiselect == true {
             if selected.contains(label) {
                 selected.remove(label)
@@ -282,7 +281,7 @@ public final class OpenClawQuestionCardModel: Identifiable {
     }
 
     private func answers() -> [String: [String]]? {
-        var result: [String: [String]] = [:]
+        @Published var result: [String: [String]] = [:]
         for question in self.record.questions {
             let selected = self.selectedOptions[question.questionid] ?? []
             var values = question.options.compactMap { selected.contains($0.label) ? $0.label : nil }
@@ -311,10 +310,10 @@ public final class OpenClawQuestionCardModel: Identifiable {
         encoder.outputFormatting = [.sortedKeys]
         return (try? encoder.encode(lhs)) == (try? encoder.encode(rhs))
     }
-}
+
 
 struct OpenClawQuestionCard: View {
-    @Bindable private var model: OpenClawQuestionCardModel
+    @ObservedObject private var model: OpenClawQuestionCardModel
     private let onSubmit: @MainActor @Sendable (OpenClawQuestionCardModel) async -> Void
     private let onSkip: (@MainActor @Sendable (OpenClawQuestionCardModel) async -> Void)?
     #if os(macOS)

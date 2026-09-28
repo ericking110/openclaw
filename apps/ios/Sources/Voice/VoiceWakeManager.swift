@@ -1,6 +1,6 @@
 import AVFAudio
 import Foundation
-import Observation
+import Combine
 import Speech
 import SwabbleKit
 
@@ -13,7 +13,7 @@ private func makeAudioTapEnqueueCallback(queue: AudioBufferQueue) -> @Sendable (
 
 private final class AudioBufferQueue: @unchecked Sendable {
     private let lock = NSLock()
-    private var buffers: [AVAudioPCMBuffer] = []
+    @Published private var buffers: [AVAudioPCMBuffer] = []
 
     func enqueueCopy(of buffer: AVAudioPCMBuffer) {
         guard let copy = buffer.deepCopy() else { return }
@@ -97,31 +97,30 @@ extension AVAudioPCMBuffer {
 }
 
 @MainActor
-@Observable
 final class VoiceWakeManager: NSObject {
-    var isEnabled: Bool = false
-    var isListening: Bool = false
-    var statusText: String = "Off"
-    var triggerWords: [String] = VoiceWakePreferences.loadTriggerWords()
-    var lastTriggeredCommand: String?
+    @Published var isEnabled: Bool = false
+    @Published var isListening: Bool = false
+    @Published var statusText: String = "Off"
+    @Published var triggerWords: [String] = VoiceWakePreferences.loadTriggerWords()
+    @Published var lastTriggeredCommand: String?
 
     private let audioEngine = AVAudioEngine()
-    private var speechRecognizer: SFSpeechRecognizer?
-    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
-    private var recognitionTask: SFSpeechRecognitionTask?
-    private var recognitionGeneration: UInt64 = 0
-    private var tapQueue: AudioBufferQueue?
-    private var tapDrainTask: Task<Void, Never>?
-    private var scheduledStartTask: Task<Void, Never>?
-    private var commandTask: Task<Void, Never>?
-    private var commandGeneration: UInt64 = 0
-    private var isStarting: Bool = false
-    private var audioSessionIsActive = false
+    @Published private var speechRecognizer: SFSpeechRecognizer?
+    @Published private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+    @Published private var recognitionTask: SFSpeechRecognitionTask?
+    @Published private var recognitionGeneration: UInt64 = 0
+    @Published private var tapQueue: AudioBufferQueue?
+    @Published private var tapDrainTask: Task<Void, Never>?
+    @Published private var scheduledStartTask: Task<Void, Never>?
+    @Published private var commandTask: Task<Void, Never>?
+    @Published private var commandGeneration: UInt64 = 0
+    @Published private var isStarting: Bool = false
+    @Published private var audioSessionIsActive = false
 
-    private var lastDispatched: String?
-    private var onCommand: (@MainActor @Sendable (String) async throws -> Void)?
-    private var userDefaultsObserver: NSObjectProtocol?
-    private var suppressionReasons: Set<VoiceWakeSuppressionReason> = []
+    @Published private var lastDispatched: String?
+    @Published private var onCommand: (@MainActor @Sendable (String) async throws -> Void)?
+    @Published private var userDefaultsObserver: NSObjectProtocol?
+    @Published private var suppressionReasons: Set<VoiceWakeSuppressionReason> = []
 
     private let recognitionErrorRestartDelayNs: UInt64
     private let audioSessionDeactivationAction: (@MainActor () throws -> Void)?
@@ -561,7 +560,7 @@ final class VoiceWakeManager: NSObject {
 }
 
 #if DEBUG
-extension VoiceWakeManager {
+extension VoiceWakeManager: ObservableObject {
     static func _test_withoutRestartDelays(
         audioSessionDeactivationAction: (@MainActor () throws -> Void)? = nil) -> VoiceWakeManager
     {

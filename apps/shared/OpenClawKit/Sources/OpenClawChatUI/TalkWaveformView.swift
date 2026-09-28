@@ -155,7 +155,7 @@ public struct TalkAvatarWaveformView<Avatar: View>: View {
         .frame(width: self.diameter, height: self.diameter)
         .animation(self.reduceMotion ? nil : .easeOut(duration: 0.2), value: isActive)
         .onAppear { self.capture(self.measuredLevel) }
-        .onChange(of: self.measuredLevel) { _, level in
+        .onChange(of: self.measuredLevel) { level in
             self.capture(level)
         }
     }

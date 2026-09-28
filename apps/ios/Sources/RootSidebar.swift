@@ -3,10 +3,10 @@ import OpenClawProtocol
 import SwiftUI
 
 struct RootSidebar: View {
-    @Environment(NodeAppModel.self) private var appModel
+    @EnvironmentObject private var appModel: NodeAppModel
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.displayScale) private var displayScale
-    @Bindable var model: RootSidebarModel
+    @ObservedObject var model: RootSidebarModel
     @State private var searchText = ""
     @State private var isSearchActive = false
     @State private var showsPagesEditor = false
@@ -45,7 +45,7 @@ struct RootSidebar: View {
         }
         .foregroundStyle(OpenClawSidebarPalette.text)
         .background(OpenClawSidebarPalette.background)
-        .onChange(of: self.isDismissButtonEnabled) { _, isVisible in
+        .onChange(of: self.isDismissButtonEnabled) { isVisible in
             if !isVisible {
                 self.presentedAttention = nil
                 self.isSearchFocused = false

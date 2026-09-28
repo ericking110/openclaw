@@ -45,7 +45,7 @@ struct ChatCopyButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(self.label)
-        .contentTransition(.symbolEffect(.replace))
+        .modifier(SymbolReplaceTransition())
         .task(id: self.copiedAt) {
             guard let copiedAt = self.copiedAt else { return }
             // A repeat tap changes the id and cancels this task; the newer task owns the reset,

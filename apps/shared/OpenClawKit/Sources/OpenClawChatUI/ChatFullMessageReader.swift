@@ -63,7 +63,7 @@ struct ChatFullMessageReader: View {
                             .padding(20)
                     }
                 case let .failed(message):
-                    ContentUnavailableView(
+                    contentUnavailableView(
                         String(localized: "Full message unavailable"),
                         systemImage: "doc.text.magnifyingglass",
                         description: Text(message))

@@ -1,5 +1,5 @@
 import Foundation
-import Observation
+import Combine
 import SwiftUI
 
 enum ChatSessionBatchAction: Sendable, Equatable {
@@ -129,7 +129,7 @@ struct ChatSessionInspectorDetails: Equatable {
 
 @MainActor
 struct ChatSessionInspectorSheet: View {
-    @Bindable var viewModel: OpenClawChatViewModel
+    @ObservedObject var viewModel: OpenClawChatViewModel
 
     @Environment(\.dismiss) private var dismiss
     @State private var displayedSession: OpenClawChatSessionEntry
@@ -320,7 +320,7 @@ struct ChatSessionInspectorSheet: View {
 
 @MainActor
 struct ChatSessionGroupsSheet: View {
-    @Bindable var viewModel: OpenClawChatViewModel
+    @ObservedObject var viewModel: OpenClawChatViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var groups: [OpenClawChatSessionGroup] = []
     @State private var newGroupName = ""
@@ -492,14 +492,13 @@ struct ChatSessionGroupsSheet: View {
 }
 
 @MainActor
-@Observable
-final class ChatNewSessionAgentOptions {
-    var agents: [OpenClawChatAgentChoice] = []
-    var selectedAgentID = ""
-    var isLoading = true
-    var routeLease: OpenClawChatNewSessionRouteLease?
-    var errorText: String?
-    private var generation = 0
+final class ChatNewSessionAgentOptions: ObservableObject{
+    @Published var agents: [OpenClawChatAgentChoice] = []
+    @Published var selectedAgentID = ""
+    @Published var isLoading = true
+    @Published var routeLease: OpenClawChatNewSessionRouteLease?
+    @Published var errorText: String?
+    @Published private var generation = 0
 
     var selectedAgent: OpenClawChatAgentChoice? {
         self.agents.first { $0.id == self.selectedAgentID }
@@ -545,11 +544,11 @@ final class ChatNewSessionAgentOptions {
             if !Task.isCancelled { self.errorText = error.localizedDescription }
         }
     }
-}
+
 
 @MainActor
 public struct ChatNewSessionOptionsPopover: View {
-    @Bindable var viewModel: OpenClawChatViewModel
+    @ObservedObject var viewModel: OpenClawChatViewModel
     let onComplete: () -> Void
 
     @State private var agentOptions = ChatNewSessionAgentOptions()

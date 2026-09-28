@@ -56,18 +56,18 @@ struct ChatTranscriptSearch: ViewModifier {
                     }
                 }
             }
-            .onChange(of: self.focusRequest) { _, _ in
+            .onChange(of: self.focusRequest) { _ in
                 self.isPresented = true
                 self.isFocused = true
             }
-            .onChange(of: results) { _, results in
+            .onChange(of: results) { results in
                 guard self.isPresented else { return }
                 if !results.messageIDs.contains(where: { $0 == self.selectedMessageID }) {
                     self.select(results.messageIDs.first)
                 }
             }
-            .onChange(of: self.sessionKey) { _, _ in self.close() }
-            .onChange(of: self.isPresented) { _, isPresented in
+            .onChange(of: self.sessionKey) { _ in self.close() }
+            .onChange(of: self.isPresented) { isPresented in
                 if !isPresented { self.close() }
             }
     }

@@ -2,7 +2,7 @@ import Darwin
 import Foundation
 import ImageIO
 import Markdown
-import Observation
+import Combine
 import SwiftUI
 
 let chatLinkPreviewTitleMaxCharacters = 120
@@ -708,14 +708,13 @@ private let chatLinkPreviewImageStore = ChatLinkPreviewStore(
     fetch: ChatLinkPreviewFetcher().fetchImage)
 
 @MainActor
-@Observable
-final class ChatLinkPreviewModel {
+final class ChatLinkPreviewModel: ObservableObject{
     typealias MetadataFetch = @Sendable (URL) async -> ChatLinkPreviewResult
     typealias ImageFetch = @Sendable (URL) async -> ChatLinkPreviewImageResult
 
-    var expanded = false
-    private(set) var result: ChatLinkPreviewResult?
-    private(set) var imageResult: ChatLinkPreviewImageResult?
+    @Published var expanded = false
+    @Published private(set) var result: ChatLinkPreviewResult?
+    @Published private(set) var imageResult: ChatLinkPreviewImageResult?
     private let metadataFetch: MetadataFetch
     private let imageFetch: ImageFetch
 
@@ -743,7 +742,7 @@ final class ChatLinkPreviewModel {
         guard !Task.isCancelled else { return }
         self.imageResult = result
     }
-}
+
 
 @MainActor
 struct ChatLinkPreview: View {

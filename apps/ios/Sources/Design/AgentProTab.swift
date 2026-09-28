@@ -2,7 +2,7 @@ import OpenClawKit
 import SwiftUI
 
 struct AgentProTab: View {
-    @Environment(NodeAppModel.self) var appModel
+    @EnvironmentObject var appModel: NodeAppModel
     @Environment(\.scenePhase) var scenePhase
     let directRoute: AgentRoute
     let headerSidebarAction: OpenClawSidebarHeaderAction?

@@ -1,9 +1,8 @@
 import Foundation
-import Observation
+import Combine
 
 @MainActor
-@Observable
-final class ChatSessionSidebarPreviews {
+final class ChatSessionSidebarPreviews: ObservableObject{
     struct Target: Hashable {
         let key: String
         let agentID: String?
@@ -35,16 +34,16 @@ final class ChatSessionSidebarPreviews {
             self.sessionKey = viewModel.sessionKey
             let agentID = viewModel.selectedAgentID
             self.agentID = agentID
-            var seen = Set<Target>()
+            @Published var seen = Set<Target>()
             self.targets = Array(sessions.compactMap {
                 Target(session: $0, fallbackAgentID: agentID)
             }.filter { seen.insert($0).inserted }.prefix(32))
         }
     }
 
-    private var request: Request?
-    private var previews: [Target: String] = [:]
-    @ObservationIgnored private var generation: UInt64 = 0
+    @Published private var request: Request?
+    @Published private var previews: [Target: String] = [:]
+    private var generation: UInt64 = 0
 
     func refresh(_ request: Request, cache: (any OpenClawChatTranscriptCache)?) async {
         self.generation &+= 1
@@ -70,4 +69,4 @@ final class ChatSessionSidebarPreviews {
         else { return nil }
         return self.previews[target]
     }
-}
+

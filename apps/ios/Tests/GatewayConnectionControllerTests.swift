@@ -1,6 +1,5 @@
 import Foundation
 import Network
-import Observation
 import OpenClawChatUI
 import os
 import Testing
@@ -2869,9 +2868,9 @@ private func waitUntil(
         // In cancellation/failure cases only the queued restoration generation
         // remains. Its completion must invalidate a SwiftUI observation too.
         let invalidated = OSAllocatedUnfairLock(initialState: false)
-        withObservationTracking {
+        backportObservationTracking({
             _ = controller.hasPendingConnectionHandoff
-        } onChange: {
+        }, onChange: {
             invalidated.withLock { $0 = true }
         }
         resetRelease.continuation.yield()

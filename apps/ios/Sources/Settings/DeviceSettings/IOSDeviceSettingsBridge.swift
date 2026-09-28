@@ -1,5 +1,4 @@
 import Foundation
-import Observation
 import OpenClawKit
 import UIKit
 import UserNotifications
@@ -408,7 +407,7 @@ final class IOSDeviceSettingsBridge: NSObject, WKScriptMessageHandlerWithReply {
     private func observeOwners() {
         let observationID = self.observationID
         let locationAuthorization = self.appModel.locationAuthorizationSnapshot
-        withObservationTracking {
+        backportObservationTracking({
             _ = self.appearanceModel.preference
             _ = self.appModel.locationAuthorizationSnapshot
             _ = self.appModel.voiceWake.isEnabled
@@ -416,7 +415,7 @@ final class IOSDeviceSettingsBridge: NSObject, WKScriptMessageHandlerWithReply {
             _ = self.appModel.isOperatorGatewayConnected
             _ = self.appModel.hasOperatorAdminScope
             _ = self.appModel.activeGatewayConnectConfig
-        } onChange: { [weak self] in
+        }, onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self, self.observationID == observationID, self.webView != nil else { return }
                 if self.appModel.locationAuthorizationSnapshot != locationAuthorization {
@@ -425,7 +424,7 @@ final class IOSDeviceSettingsBridge: NSObject, WKScriptMessageHandlerWithReply {
                 self.refresh()
                 self.observeOwners()
             }
-        }
+        })
     }
 
     isolated deinit { self.detach() }

@@ -1,4 +1,4 @@
-import Observation
+import Combine
 import OpenClawChatUI
 import SwiftUI
 
@@ -33,8 +33,7 @@ enum AppAppearancePreference: String, CaseIterable, Identifiable {
 }
 
 @MainActor
-@Observable
-final class AppAppearanceModel {
+final class AppAppearanceModel: ObservableObject {
     private(set) var preference: AppAppearancePreference
 
     init(userDefaults: UserDefaults = .standard) {
@@ -49,7 +48,7 @@ final class AppAppearanceModel {
     func select(_ preference: AppAppearancePreference, userDefaults: UserDefaults = .standard) {
         guard self.preference != preference else { return }
         userDefaults.set(preference.rawValue, forKey: AppAppearancePreference.storageKey)
-        var transaction = Transaction()
+        @Published var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) {
             self.preference = preference
@@ -223,9 +222,9 @@ extension TalkWaveformPalette {
 
 struct OpenClawActivationGlyph: View {
     let size: CGFloat
-    var mood: OpenClawMascotMood = .idle
+    @Published var mood: OpenClawMascotMood = .idle
     /// Opt-in tap Easter eggs; leave off when the glyph sits inside a control.
-    var interactive = false
+    @Published var interactive = false
 
     var body: some View {
         OpenClawMascotView(floats: false, mood: self.mood, interactive: self.interactive)
@@ -283,7 +282,7 @@ private struct OpenClawCraftSurfaceModifier: ViewModifier {
 
 struct OpenClawPrimaryActionButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
-    var height: CGFloat = 54
+    @Published var height: CGFloat = 54
 
     private var resolvedCornerRadius: CGFloat {
         self.height / 2
@@ -361,8 +360,8 @@ struct OpenClawPrimaryActionButtonStyle: ButtonStyle {
 
 struct OpenClawSecondaryActionButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
-    var height: CGFloat = 50
-    var shadowOpacity: Double = 0.035
+    @Published var height: CGFloat = 50
+    @Published var shadowOpacity: Double = 0.035
 
     private var resolvedCornerRadius: CGFloat {
         self.height / 2
@@ -422,8 +421,8 @@ struct OpenClawSecondaryActionButtonStyle: ButtonStyle {
 
 struct OpenClawCloseButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
-    var minWidth: CGFloat = 36
-    var height: CGFloat = 36
+    @Published var minWidth: CGFloat = 36
+    @Published var height: CGFloat = 36
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label

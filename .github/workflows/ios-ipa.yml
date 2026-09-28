@@ -1,0 +1,65 @@
+name: Build iOS IPA (iOS 15, unsigned for TrollStore)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/ios/**'
+      - '.github/workflows/ios-ipa.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Xcode
+        run: |
+          xcodebuild -version
+          ls /Applications | grep -i xcode || true
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Prepare
+        run: |
+          export PATH="$PATH:/opt/homebrew/bin"
+          ./scripts/ios-configure-signing.sh || true
+          ./scripts/ios-write-version-xcconfig.sh || true
+          node scripts/ios-write-swift-filelist.mjs || true
+
+      - name: Generate Xcode project
+        working-directory: apps/ios
+        run: xcodegen generate
+
+      - name: Build archive (no code signing)
+        run: |
+          cd apps/ios
+          xcodebuild \
+            -project OpenClaw.xcodeproj \
+            -scheme OpenClaw \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/OpenClaw.xcarchive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_ENTITLEMENTS="" \
+            archive
+
+      - name: Create unsigned IPA
+        run: |
+          cd apps/ios/build
+          mkdir -p Payload
+          cp -r OpenClaw.xcarchive/Products/Applications/OpenClaw.app Payload/
+          zip -qr OpenClaw-iOS15-unsigned.ipa Payload
+          ls -la OpenClaw-iOS15-unsigned.ipa
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenClaw-iOS15-unsigned
+          path: apps/ios/build/OpenClaw-iOS15-unsigned.ipa
+          retention-days: 30

@@ -106,10 +106,11 @@ struct ChatMermaidBlockView: View {
         .background(OpenClawChatTheme.assistantBubble)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.secondary.opacity(0.2)))
-        .onGeometryChange(for: Int.self) { geometry in
+        .backportOnGeometryChange(for: Int.self) { geometry in
             Int(geometry.size.width.rounded(.up))
         } action: { self.width = $0 }
-        .onChange(of: self.request, initial: true) { _, _ in self.render() }
+        .onChange(of: self.request) { _ in self.render() }
+        .onAppear { self.render() }
         .onDisappear { self.cancel() }
         .onHover { self.isHovered = $0 }
         #if os(macOS)
@@ -241,7 +242,7 @@ private struct ChatMermaidPreviewView: View {
         #if os(macOS)
         .frame(minWidth: 500, idealWidth: 900, minHeight: 350, idealHeight: 600)
         // Mac sheets default to a form width; fit both axes so Expand honors the ideal size.
-        .presentationSizing(.fitted)
+        .backportPresentationSizing()
         #endif
     }
 }

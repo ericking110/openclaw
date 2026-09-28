@@ -118,7 +118,7 @@ struct OpenClawWatchApp: App {
                     self.receiver?.replayChatDelivery()
                 }
         }
-        .onChange(of: self.scenePhase) { _, newPhase in
+        .onChange(of: self.scenePhase) { newPhase in
             switch newPhase {
             case .active:
                 self.directNode.connectForForeground()

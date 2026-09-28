@@ -1,5 +1,4 @@
 import Foundation
-import Observation
 import XCTest
 @testable import OpenClaw
 @testable import OpenClawChatUI
@@ -236,9 +235,9 @@ final class ChatSendHydrationTests: XCTestCase {
                 try await gateway.releaseHealth()
                 let (entered, entry) = AsyncStream<Void>.makeStream()
                 defer { entry.finish() }
-                withObservationTracking {
+                backportObservationTracking({
                     _ = original.isSubmittingDraft
-                } onChange: {
+                }, onChange: {
                     entry.yield()
                     entry.finish()
                 }
@@ -355,9 +354,9 @@ private final class ChatSendHydrationObservation {
             continuation?.resume()
             return
         }
-        withObservationTracking {
+        backportObservationTracking({
             _ = self.condition()
-        } onChange: { [weak self] in
+        }, onChange: { [weak self] in
             Task { @MainActor in self?.observe() }
         }
     }

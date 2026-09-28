@@ -1,7 +1,7 @@
 import AVFoundation
 import AVKit
 import Foundation
-import Observation
+import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -171,17 +171,16 @@ struct ChatMediaVideoAttachment: View {
 }
 
 @MainActor
-@Observable
-final class ChatMediaVideoPlayer: ChatMediaNowPlayingOwner {
+final class ChatMediaVideoPlayer: ObservableObject{
     let player: AVPlayer
-    private(set) var isPlaying = false
-    private(set) var isPlaybackBlocked = false
-    private(set) var isUnavailable = false
+    @Published private(set) var isPlaying = false
+    @Published private(set) var isPlaybackBlocked = false
+    @Published private(set) var isUnavailable = false
 
-    @ObservationIgnored private let playbackAllowed: @MainActor @Sendable () -> Bool
-    @ObservationIgnored private let title: String
-    @ObservationIgnored private let temporaryFileURL: URL?
-    @ObservationIgnored private var statusTask: Task<Void, Never>?
+    private let playbackAllowed: @MainActor @Sendable () -> Bool
+    private let title: String
+    private let temporaryFileURL: URL?
+    private var statusTask: Task<Void, Never>?
 
     init(
         loaded: OpenClawChatLoadedMedia,
@@ -340,7 +339,7 @@ final class ChatMediaVideoPlayer: ChatMediaNowPlayingOwner {
             return url
         }.value
     }
-}
+
 
 private enum ChatMediaVideoError: Error {
     case unsupportedMediaType

@@ -79,7 +79,7 @@ struct GatewayCustomHeadersSettingsView: View {
                 .font(OpenClawType.subheadSemiBold)
         }
         .onAppear(perform: self.loadOnce)
-        .onChange(of: self.entries) { _, _ in
+        .onChange(of: self.entries) { _ in
             guard self.loaded else { return }
             self.persist()
         }

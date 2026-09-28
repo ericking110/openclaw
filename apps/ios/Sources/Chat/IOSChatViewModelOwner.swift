@@ -1,11 +1,10 @@
 import Foundation
-import Observation
+import Combine
 import OpenClawChatUI
 import OpenClawProtocol
 
 @MainActor
-@Observable
-final class IOSChatViewModelOwner {
+final class IOSChatViewModelOwner: ObservableObject {
     private(set) var viewModel: OpenClawChatViewModel?
     private(set) var presentationID = UUID()
     private(set) var ownerID = ""
@@ -13,12 +12,12 @@ final class IOSChatViewModelOwner {
     private(set) var presentationAgentName = "Main"
     private(set) var presentationAgentBadge = "M"
     private(set) var hasVerifiedOfflineRoutingIdentity = false
-    private var transportAgentID = ""
-    private var routingContract = ""
-    private var wasConnected = false
-    @ObservationIgnored private var hydratedComposerModel: (@MainActor () -> OpenClawChatViewModel?)?
-    @ObservationIgnored private var controlUIInputs: GatewayConnectConfig.ControlUIInputs?
-    @ObservationIgnored private var isObservingPendingSend = false
+    @Published private var transportAgentID = ""
+    @Published private var routingContract = ""
+    @Published private var wasConnected = false
+    private var hydratedComposerModel: (@MainActor () -> OpenClawChatViewModel?)?
+    private var controlUIInputs: GatewayConnectConfig.ControlUIInputs?
+    private var isObservingPendingSend = false
 
     private var hasPendingSend: Bool {
         guard let viewModel else { return false }
@@ -126,16 +125,16 @@ final class IOSChatViewModelOwner {
         guard !self.isObservingPendingSend else { return }
         self.isObservingPendingSend = true
         // A fast send can settle between SwiftUI updates, so the owner observes its release directly.
-        withObservationTracking {
+        backportObservationTracking({
             _ = self.hasPendingSend
-        } onChange: { [weak self, weak appModel] in
+        }, onChange: { [weak self, weak appModel] in
             Task { @MainActor in
                 guard let self else { return }
                 self.isObservingPendingSend = false
                 guard let appModel else { return }
                 self.sync(appModel: appModel)
             }
-        }
+        })
     }
 
     func composerModelResolver() -> @MainActor () -> OpenClawChatViewModel? {

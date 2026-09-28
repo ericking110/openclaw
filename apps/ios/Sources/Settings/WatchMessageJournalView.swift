@@ -3,7 +3,7 @@ import OpenClawKit
 import SwiftUI
 
 struct WatchMessageJournalView: View {
-    @Environment(NodeAppModel.self) private var appModel
+    @EnvironmentObject private var appModel: NodeAppModel
     @State private var journal: OpenClawWatchMessageJournal?
     @State private var entries: [OpenClawWatchMessageEntry] = []
     @State private var pendingDiscard: OpenClawWatchMessageEntry?

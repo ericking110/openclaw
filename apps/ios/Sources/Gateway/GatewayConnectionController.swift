@@ -1,6 +1,6 @@
 import Foundation
 import Network
-import Observation
+import Combine
 import OpenClawKit
 import SwiftUI
 
@@ -10,8 +10,7 @@ typealias GatewayForceReconnectReset = @MainActor (NodeAppModel) async -> Void
 typealias GatewayTLSFingerprintPersist = @Sendable (_ fingerprint: String, _ stableID: String) -> Bool
 
 @MainActor
-@Observable
-final class GatewayConnectionController {
+final class GatewayConnectionController: ObservableObject {
     struct TrustPrompt: Identifiable, Equatable {
         let stableID: String
         let gatewayName: String
@@ -47,8 +46,8 @@ final class GatewayConnectionController {
 
     private struct GatewayRestoration {
         let config: GatewayConnectConfig
-        var generation: UInt64
-        var replacementStableID: String?
+        @Published var generation: UInt64
+        @Published var replacementStableID: String?
     }
 
     private(set) var gateways: [GatewayDiscoveryModel.DiscoveredGateway] = []
@@ -60,28 +59,28 @@ final class GatewayConnectionController {
     private let discovery = GatewayDiscoveryModel()
     private let discoveryEnabled: Bool
     private weak var appModel: NodeAppModel?
-    private var localNetworkAccessRequested: Bool
-    private var currentScenePhase: ScenePhase = .inactive
-    private var didAutoConnect = false
-    private var pendingServiceResolvers: [String: GatewayServiceResolver] = [:]
-    private var pendingTrustConnect: GatewayPendingTrustConnect?
-    private var preconnectRetryContext: PreconnectRetryContext?
-    private var trustProbeGeneration: UInt64 = 0
-    private var connectAttemptGeneration: UInt64 = 0
-    private var autoConnectSuppressionGeneration: UInt64?
-    private var autoConnectSuppressionBaseline: (
+    @Published private var localNetworkAccessRequested: Bool
+    @Published private var currentScenePhase: ScenePhase = .inactive
+    @Published private var didAutoConnect = false
+    @Published private var pendingServiceResolvers: [String: GatewayServiceResolver] = [:]
+    @Published private var pendingTrustConnect: GatewayPendingTrustConnect?
+    @Published private var preconnectRetryContext: PreconnectRetryContext?
+    @Published private var trustProbeGeneration: UInt64 = 0
+    @Published private var connectAttemptGeneration: UInt64 = 0
+    @Published private var autoConnectSuppressionGeneration: UInt64?
+    @Published private var autoConnectSuppressionBaseline: (
         autoReconnectEnabled: Bool,
         restoresAutoReconnect: Bool,
         suspendedConfig: GatewayConnectConfig?)?
-    @ObservationIgnored private var pendingAutoConnectTask: Task<Void, Never>?
-    @ObservationIgnored private var operatorFleetReconcileTask: Task<Void, Never>?
-    private var pendingAutoConnectGeneration: UInt64?
-    @ObservationIgnored private var pendingAutoConnectSuppressionGeneration: UInt64?
-    @ObservationIgnored private var pendingGatewayRestoration: GatewayRestoration?
-    @ObservationIgnored private var pendingForgetCleanups: [
+    private var pendingAutoConnectTask: Task<Void, Never>?
+    private var operatorFleetReconcileTask: Task<Void, Never>?
+    @Published private var pendingAutoConnectGeneration: UInt64?
+    private var pendingAutoConnectSuppressionGeneration: UInt64?
+    private var pendingGatewayRestoration: GatewayRestoration?
+    private var pendingForgetCleanups: [
         GatewayStableIdentifier.Key: (id: UUID, task: Task<Bool, Never>)
     ] = [:]
-    private var pendingConnectionStableID: String?
+    @Published private var pendingConnectionStableID: String?
     private let tcpReachabilityProbe: GatewayTCPReachabilityProbe
     private let tlsFingerprintProbe: GatewayTLSFingerprintProbeFunction
     private let serviceEndpointResolver: GatewayServiceEndpointResolver?
@@ -443,7 +442,7 @@ final class GatewayConnectionController {
             self.appModel?.gatewayStatusText = message
             return .failed(message)
         }
-        var expectedFingerprint = setupFingerprint ?? stored
+        @Published var expectedFingerprint = setupFingerprint ?? stored
         if resolvedUseTLS, expectedFingerprint == nil {
             guard let url = self.buildGatewayURL(
                 host: host,
@@ -995,17 +994,17 @@ extension GatewayConnectionController {
     }
 
     private func observeDiscovery() {
-        withObservationTracking {
+        backportObservationTracking({
             _ = self.discovery.gateways
             _ = self.discovery.statusText
             _ = self.discovery.debugLog
-        } onChange: { [weak self] in
+        }, onChange: { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
                 self.updateFromDiscovery()
                 self.observeDiscovery()
             }
-        }
+        })
     }
 
     private func maybeAutoConnect() {
@@ -1283,7 +1282,7 @@ extension GatewayConnectionController {
                 }
             }
 
-            var configs: [GatewayConnectConfig] = []
+            @Published var configs: [GatewayConnectConfig] = []
             for await resolved in group {
                 guard !Task.isCancelled, self.currentScenePhase == .active else {
                     group.cancelAll()

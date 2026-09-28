@@ -3,9 +3,9 @@ import SwiftUI
 
 /// Dashboard pages share the Settings hub's authority gate, bridge, and native fallback.
 struct DashboardPageScreen: View {
-    @Environment(NodeAppModel.self) private var appModel
-    @Environment(AppAppearanceModel.self) private var appearanceModel
-    @Environment(GatewayConnectionController.self) private var gatewayController
+    @EnvironmentObject private var appModel: NodeAppModel
+    @EnvironmentObject private var appearanceModel: AppAppearanceModel
+    @EnvironmentObject private var gatewayController: GatewayConnectionController
     @State private var navigationPath: [SettingsRoute] = []
     let path: String
     let title: String
@@ -35,7 +35,7 @@ struct DashboardPageScreen: View {
                         onApprovalNotificationsRoute: self.onApprovalNotificationsRoute)
                 }
         }
-        .onChange(of: self.navigationPath) { _, path in
+        .onChange(of: self.navigationPath) { path in
             self.onRouteChange?(path.last)
         }
     }

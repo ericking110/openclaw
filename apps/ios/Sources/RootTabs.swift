@@ -25,9 +25,9 @@ struct RootTabs: View {
         let authority: GatewayConnectConfig.ControlUIInputs?
     }
 
-    @Environment(NodeAppModel.self) private var appModel
-    @Environment(VoiceWakeManager.self) private var voiceWake
-    @Environment(GatewayConnectionController.self) private var gatewayController
+    @EnvironmentObject private var appModel: NodeAppModel
+    @EnvironmentObject private var voiceWake: VoiceWakeManager
+    @EnvironmentObject private var gatewayController: GatewayConnectionController
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -210,13 +210,13 @@ struct RootTabs: View {
                 .onAppear {
                     self.updateSidebarLayout(containerSize: layoutContainerSize)
                 }
-                .onChange(of: proxy.size) { _, size in
+                .onChange(of: proxy.size) { size in
                     let layoutContainerSize = Self.sidebarLayoutContainerSize(
                         contentSize: size,
                         windowSize: self.foregroundKeyWindowSize())
                     self.updateSidebarLayout(containerSize: layoutContainerSize)
                 }
-                .onChange(of: self.dynamicTypeSize) { _, _ in
+                .onChange(of: self.dynamicTypeSize) { _ in
                     self.updateSidebarLayout(containerSize: layoutContainerSize)
                 }
                 // Single refresh owner: identity/session changes, scene activation,
@@ -290,8 +290,8 @@ struct RootTabs: View {
             hideSidebar: self.hideSidebar)
             .padding(.top, drawerSafeAreaInsets.map { $0.top + 8 } ?? 0)
             .padding(.bottom, drawerSafeAreaInsets.map { $0.bottom + 8 } ?? 0)
-            .safeAreaPadding(.top, drawerSafeAreaInsets == nil ? 8 : 0)
-            .safeAreaPadding(.bottom, drawerSafeAreaInsets == nil ? 8 : 0)
+            .backportSafeAreaPadding(.top, drawerSafeAreaInsets == nil ? 8 : 0)
+            .backportSafeAreaPadding(.bottom, drawerSafeAreaInsets == nil ? 8 : 0)
             // Paints the wrapper's inset strips; RootSidebar's own background
             // stops at its bounds.
             .background(OpenClawSidebarPalette.background)
@@ -384,7 +384,7 @@ struct RootTabs: View {
                 }
             }
         }
-        .onChange(of: self.sidebarNavigationPath) { _, navigationPath in
+        .onChange(of: self.sidebarNavigationPath) { navigationPath in
             self.handleSidebarSettingsNavigationPathChange(navigationPath)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -472,7 +472,7 @@ struct RootTabs: View {
                             secondaryActionTitle: "Dismiss",
                             onSecondaryAction: { self.appModel.liveVoiceStartError = nil })
                             .padding(.horizontal, 12)
-                            .safeAreaPadding(.top, 10)
+                            .backportSafeAreaPadding(.top, 10)
                     } else if let gatewayRetryFailure {
                         OpenClawNoticeBanner(
                             icon: "wifi.exclamationmark",
@@ -483,7 +483,7 @@ struct RootTabs: View {
                             secondaryActionTitle: "Dismiss",
                             onSecondaryAction: { self.gatewayRetryFailure = nil })
                             .padding(.horizontal, 12)
-                            .safeAreaPadding(.top, 10)
+                            .backportSafeAreaPadding(.top, 10)
                             .transition(.move(edge: .top).combined(with: .opacity))
                     } else if let gatewayProblem = self.activeGatewayProblemToast {
                         self.gatewayProblemToast(gatewayProblem)
@@ -496,7 +496,7 @@ struct RootTabs: View {
                 if let voiceWakeToastText, !voiceWakeToastText.isEmpty {
                     VoiceWakeToast(command: voiceWakeToastText)
                         .padding(.leading, 10)
-                        .safeAreaPadding(
+                        .backportSafeAreaPadding(
                             .top,
                             self.activeGatewayProblemToast == nil && self.gatewayRetryFailure == nil
                                 && self.appModel.liveVoiceStartError == nil ? 58 : 132)
@@ -535,7 +535,7 @@ struct RootTabs: View {
                 self.showGatewayProblemDetails = true
             })
             .padding(.horizontal, 12)
-            .safeAreaPadding(.top, 10)
+            .backportSafeAreaPadding(.top, 10)
             .offset(y: min(self.gatewayToastDragOffset, 0))
             .gesture(self.gatewayToastSwipeGesture)
             // A drag cancelled by toast removal never fires onEnded; clear the
@@ -574,7 +574,7 @@ struct RootTabs: View {
 
     private func rootVoiceWakeLifecycle(_ content: some View) -> some View {
         content
-            .onChange(of: self.voiceWake.lastTriggeredCommand) { _, newValue in
+            .onChange(of: self.voiceWake.lastTriggeredCommand) { newValue in
                 guard let newValue else { return }
                 let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty else { return }
@@ -603,9 +603,9 @@ struct RootTabs: View {
                 self.handleLiveVoiceStartRequest()
                 self.handleOpenChatRequest(self.appModel.openChatRequestID)
             }
-            .onChange(of: self.preventSleep) { _, _ in self.updateIdleTimer() }
-            .onChange(of: self.appModel.talkMode.isEnabled) { _, _ in self.updateIdleTimer() }
-            .onChange(of: self.scenePhase) { _, newValue in
+            .onChange(of: self.preventSleep) { _ in self.updateIdleTimer() }
+            .onChange(of: self.appModel.talkMode.isEnabled) { _ in self.updateIdleTimer() }
+            .onChange(of: self.scenePhase) { newValue in
                 self.updateIdleTimer()
                 guard newValue == .active else {
                     self.clearVoiceWakeToast()
@@ -630,20 +630,20 @@ struct RootTabs: View {
 
     private func rootGatewayProblemLifecycle(_ content: some View) -> some View {
         content
-            .onChange(of: self.appModel.lastGatewayProblem) { _, newValue in
+            .onChange(of: self.appModel.lastGatewayProblem) { newValue in
                 if newValue == nil {
                     self.isGatewayToastSwipeDismissed = false
                 }
             }
-            .onChange(of: self.appModel.gatewayProblemReportCount) { _, _ in
+            .onChange(of: self.appModel.gatewayProblemReportCount) { _ in
                 self.handleGatewayProblemReport()
             }
     }
 
     private func rootGatewayLifecycle(_ content: some View) -> some View {
         self.rootGatewayProblemLifecycle(content)
-            .onChange(of: self.gatewayController.gateways.count) { _, _ in self.maybeShowQuickSetup() }
-            .onChange(of: self.appModel.gatewayServerName) { _, newValue in
+            .onChange(of: self.gatewayController.gateways.count) { _ in self.maybeShowQuickSetup() }
+            .onChange(of: self.appModel.gatewayServerName) { newValue in
                 if newValue != nil {
                     self.onboardingComplete = true
                     self.hasConnectedOnce = true
@@ -659,26 +659,26 @@ struct RootTabs: View {
             .onAppear {
                 self.handleDashboardNavigationRequest(self.appModel.dashboardNavigationRequestID)
             }
-            .onChange(of: self.onboardingRequestID) { _, _ in
+            .onChange(of: self.onboardingRequestID) { _ in
                 self.evaluateOnboardingPresentation(force: true)
             }
-            .onChange(of: self.showOnboarding) { _, newValue in
+            .onChange(of: self.showOnboarding) { newValue in
                 guard !newValue else { return }
                 self.maybeRequestLocalNetworkAccess(reason: "onboarding_dismissed")
             }
-            .onChange(of: self.appModel.pendingLiveVoiceStart) { _, _ in
+            .onChange(of: self.appModel.pendingLiveVoiceStart) { _ in
                 self.handleLiveVoiceStartRequest()
             }
-            .onChange(of: self.appModel.openChatRequestID) { _, newValue in
+            .onChange(of: self.appModel.openChatRequestID) { newValue in
                 self.handleOpenChatRequest(newValue)
             }
-            .onChange(of: self.appModel.dashboardNavigationRequestID) { _, requestID in
+            .onChange(of: self.appModel.dashboardNavigationRequestID) { requestID in
                 self.handleDashboardNavigationRequest(requestID)
             }
-            .onChange(of: self.appModel.gatewaySetupRequestID) { _, _ in
+            .onChange(of: self.appModel.gatewaySetupRequestID) { _ in
                 self.maybeOpenSettingsForGatewaySetup()
             }
-            .onChange(of: NodeAppModel.execApprovalInboxKey(self.appModel.pendingExecApprovalPrompt)) { _, newValue in
+            .onChange(of: NodeAppModel.execApprovalInboxKey(self.appModel.pendingExecApprovalPrompt)) { newValue in
                 if newValue != self.suppressedExecApprovalForNotificationSettings {
                     self.suppressedExecApprovalForNotificationSettings = nil
                 }
@@ -709,8 +709,8 @@ struct RootTabs: View {
                         self.presentedSheet = nil
                         self.selectSettingsRoute(.gateway)
                     })
-                    .environment(self.appModel)
-                    .environment(self.gatewayController)
+                    .environmentObject(self.appModel)
+                    .environmentObject(self.gatewayController)
                     .openClawSheetChrome()
                 case let .notificationSettings(path):
                     DashboardPageScreen(
@@ -736,9 +736,9 @@ struct RootTabs: View {
                         self.showOnboarding = false
                         self.selectSidebarDestination(.chat)
                     })
-                    .environment(self.appModel)
-                    .environment(self.voiceWake)
-                    .environment(self.gatewayController)
+                    .environmentObject(self.appModel)
+                    .environmentObject(self.voiceWake)
+                    .environmentObject(self.gatewayController)
             }
             .gatewayTrustPromptAlert(isEnabled: !self.showOnboarding)
             .deepLinkAgentPromptAlert()
@@ -1029,14 +1029,14 @@ private struct RootCameraFlashOverlay: View {
             .opacity(self.opacity)
             .ignoresSafeArea()
             .allowsHitTesting(false)
-            .onChange(of: self.nonce) { _, _ in
+            .onChange(of: self.nonce) { _ in
                 guard self.scenePhase == .active else {
                     self.clearFlash()
                     return
                 }
                 self.showFlash()
             }
-            .onChange(of: self.scenePhase) { _, newValue in
+            .onChange(of: self.scenePhase) { newValue in
                 guard newValue != .active else { return }
                 self.clearFlash()
             }
@@ -1155,10 +1155,10 @@ private struct RootTabsPreviewHost: View {
 
     var body: some View {
         RootTabs(initialSidebarVisibility: self.sidebarVisible)
-            .environment(self.appearanceModel)
-            .environment(self.appModel)
-            .environment(self.appModel.voiceWake)
-            .environment(self.gatewayController)
+            .environmentObject(self.appearanceModel)
+            .environmentObject(self.appModel)
+            .environmentObject(self.appModel.voiceWake)
+            .environmentObject(self.gatewayController)
     }
 }
 

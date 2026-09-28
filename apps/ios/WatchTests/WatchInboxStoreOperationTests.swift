@@ -1,5 +1,4 @@
 import Foundation
-import Observation
 import OpenClawKit
 import OpenClawNativeState
 import Testing
@@ -674,13 +673,13 @@ struct WatchInboxStoreOperationTests {
 
             // Observe actual maintenance entry, before its awaited SQLite read. The first
             // attempt still fails; only a retained overlapping wake reaches the repair below.
-            withObservationTracking {
+            backportObservationTracking({
                 _ = store.chatDeliveryMaintenanceID
-            } onChange: {
+            }, onChange: {
                 MainActor.assumeIsolated {
-                    withObservationTracking {
+                    backportObservationTracking({
                         _ = store.chatDeliveryMaintenanceID
-                    } onChange: {
+                    }, onChange: {
                         MainActor.assumeIsolated {
                             do {
                                 try FileManager.default.removeItem(at: url)
@@ -694,9 +693,9 @@ struct WatchInboxStoreOperationTests {
                 }
             }
             let replayed = XCTestExpectation(description: "The retained wake reloads the saved receipt")
-            withObservationTracking {
+            backportObservationTracking({
                 _ = store.savedChatDeliveryReceipt
-            } onChange: {
+            }, onChange: {
                 replayed.fulfill()
             }
             receiver.replayChatDelivery()

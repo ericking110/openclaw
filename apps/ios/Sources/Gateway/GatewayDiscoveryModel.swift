@@ -1,15 +1,14 @@
 import Foundation
 import Network
-import Observation
+import Combine
 import OpenClawKit
 
 @MainActor
-@Observable
-final class GatewayDiscoveryModel {
+final class GatewayDiscoveryModel: ObservableObject {
     struct DebugLogEntry: Identifiable, Equatable {
-        var id = UUID()
-        var ts: Date
-        var message: String
+        @Published var id = UUID()
+        @Published var ts: Date
+        @Published var message: String
     }
 
     struct DiscoveredGateway: Identifiable, Equatable {
@@ -17,16 +16,16 @@ final class GatewayDiscoveryModel {
             GatewayStableIdentifier.Key(self.stableID)
         }
 
-        var name: String
-        var endpoint: NWEndpoint
-        var stableID: String
-        var debugID: String
-        var lanHost: String?
-        var tailnetDns: String?
-        var gatewayPort: Int?
-        var tlsEnabled: Bool
-        var tlsFingerprintSha256: String?
-        var cliPath: String?
+        @Published var name: String
+        @Published var endpoint: NWEndpoint
+        @Published var stableID: String
+        @Published var debugID: String
+        @Published var lanHost: String?
+        @Published var tailnetDns: String?
+        @Published var gatewayPort: Int?
+        @Published var tlsEnabled: Bool
+        @Published var tlsFingerprintSha256: String?
+        @Published var cliPath: String?
 
         static func == (lhs: Self, rhs: Self) -> Bool {
             lhs.name == rhs.name &&
@@ -42,14 +41,14 @@ final class GatewayDiscoveryModel {
         }
     }
 
-    var gateways: [DiscoveredGateway] = []
-    var statusText: String = GatewayDiscoveryStatusText.idle
+    @Published var gateways: [DiscoveredGateway] = []
+    @Published var statusText: String = GatewayDiscoveryStatusText.idle
     private(set) var debugLog: [DebugLogEntry] = []
 
     private let browserSession = GatewayDiscoveryBrowserSession()
-    private var gatewaysByDomain: [String: [DiscoveredGateway]] = [:]
-    private var debugLoggingEnabled = false
-    private var lastStableIDs = Set<GatewayStableIdentifier.Key>()
+    @Published private var gatewaysByDomain: [String: [DiscoveredGateway]] = [:]
+    @Published private var debugLoggingEnabled = false
+    @Published private var lastStableIDs = Set<GatewayStableIdentifier.Key>()
 
     func setDebugLoggingEnabled(_ enabled: Bool) {
         let wasEnabled = self.debugLoggingEnabled

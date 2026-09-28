@@ -1,5 +1,5 @@
 import Foundation
-import Observation
+import Combine
 import OpenClawKit
 import OpenClawProtocol
 import OSLog
@@ -8,8 +8,7 @@ import OSLog
 let chatUILogger = Logger(subsystem: "ai.openclaw", category: "OpenClawChatUI")
 
 @MainActor
-@Observable
-public final class OpenClawChatViewModel {
+public final class OpenClawChatViewModel: ObservableObject{
     static let maxAttachmentBytes = 5_000_000
     static let sessionListFetchLimit = 200
 
@@ -27,26 +26,26 @@ public final class OpenClawChatViewModel {
     }
 
     public internal(set) var replyTarget: OpenClawChatReplyTarget?
-    @ObservationIgnored
-    var inputHistoriesBySession: [String: ChatInputHistory] = [:]
+    
+    @Published var inputHistoriesBySession: [String: ChatInputHistory] = [:]
     /// Native attachments, including images restored by rewind/fork, stay in memory only.
     /// The staging guard prevents session switches while attachments are being prepared.
-    @ObservationIgnored
-    var draftsBySession: [String: String] = [:]
-    @ObservationIgnored
-    var composerRevisionsBySession: [String: UInt64] = [:]
-    @ObservationIgnored
-    var savedDraftRevisionsBySession: [String: UInt64] = [:]
-    @ObservationIgnored
-    var isApplyingRecalledInput = false
+    
+    @Published var draftsBySession: [String: String] = [:]
+    
+    @Published var composerRevisionsBySession: [String: UInt64] = [:]
+    
+    @Published var savedDraftRevisionsBySession: [String: UInt64] = [:]
+    
+    @Published var isApplyingRecalledInput = false
     public internal(set) var thinkingLevel: String
     /// User intent stays stable while `thinkingLevel` follows the selected model's advertised levels.
-    var preferredThinkingLevel: String
+    @Published var preferredThinkingLevel: String
     public internal(set) var thinkingLevelOptions: [OpenClawChatThinkingLevelOption]
     public internal(set) var showsThinkingPicker = false
     public internal(set) var preferredVerboseLevel: String
-    var prefersExplicitVerboseLevel: Bool
-    private var requestedModelSelectionID: String = "__default__"
+    @Published var prefersExplicitVerboseLevel: Bool
+    @Published private var requestedModelSelectionID: String = "__default__"
 
     public private(set) var modelSelectionID: String {
         get { self.projectedModelSelectionID(self.requestedModelSelectionID) }
@@ -54,27 +53,27 @@ public final class OpenClawChatViewModel {
     }
 
     public internal(set) var modelChoices: [OpenClawChatModelChoice] = []
-    var modelAvailabilityIsSessionScoped = false
-    var modelSelectionPolicy: OpenClawChatModelSelectionPolicy?
-    var modelCatalogInvalidated = false
+    @Published var modelAvailabilityIsSessionScoped = false
+    @Published var modelSelectionPolicy: OpenClawChatModelSelectionPolicy?
+    @Published var modelCatalogInvalidated = false
     public internal(set) var modelCatalogMessage: String?
-    var agentCatalog: OpenClawChatAgentsListResponse?
-    var isLoadingAgents = false
-    var agentsErrorText: String?
-    @ObservationIgnored
-    var hasRequestedAgents = false
-    @ObservationIgnored
-    var agentCatalogGeneration: UInt64 = 0
-    @ObservationIgnored
-    var nextModelCatalogRequestID: UInt64 = 0
-    var modelPickerFavorites: [String]
-    var modelPickerRecents: [String]
+    @Published var agentCatalog: OpenClawChatAgentsListResponse?
+    @Published var isLoadingAgents = false
+    @Published var agentsErrorText: String?
+    
+    @Published var hasRequestedAgents = false
+    
+    @Published var agentCatalogGeneration: UInt64 = 0
+    
+    @Published var nextModelCatalogRequestID: UInt64 = 0
+    @Published var modelPickerFavorites: [String]
+    @Published var modelPickerRecents: [String]
     public internal(set) var slashCommands: [OpenClawChatCommandChoice] = []
     public internal(set) var isLoadingSlashCommands = false
     public internal(set) var slashCommandsErrorText: String?
     public internal(set) var hasLoadedSlashCommands = false
-    @ObservationIgnored
-    var slashFilterCache: SlashFilterCache?
+    
+    @Published var slashFilterCache: SlashFilterCache?
 
     private struct DeferredDeliveryIdentity {
         let activeAgentID: String?
@@ -85,14 +84,14 @@ public final class OpenClawChatViewModel {
     public internal(set) var isSending = false
     public internal(set) var isSendingAttachmentDraft = false
     public internal(set) var isSubmittingDraft = false
-    private var deferredExternalSessionKey: String?
-    private var deferredDeliveryIdentity: DeferredDeliveryIdentity?
-    @ObservationIgnored
-    var isCreatingSession = false
-    var attachmentStagingCount = 0
+    @Published private var deferredExternalSessionKey: String?
+    @Published private var deferredDeliveryIdentity: DeferredDeliveryIdentity?
+    
+    @Published var isCreatingSession = false
+    @Published var attachmentStagingCount = 0
     public private(set) var isAborting = false
-    public var errorText: String?
-    public var attachments: [OpenClawPendingAttachment] = []
+    @Published public var errorText: String?
+    @Published public var attachments: [OpenClawPendingAttachment] = []
     public internal(set) var healthOK: Bool = false
     /// Bumped after every successful group-catalog mutation so views keyed on it
     /// refetch; catalog-only changes (e.g. creating an empty group) alter no
@@ -100,36 +99,36 @@ public final class OpenClawChatViewModel {
     public internal(set) var sessionGroupsRevision = 0
     public internal(set) var sessionBranches: [OpenClawChatSessionBranch] = []
     public internal(set) var isLoadingSessionBranches = false
-    @ObservationIgnored
-    var sessionBranchesRefreshGeneration: UInt64 = 0
-    var sessionBranchSwitchActivity: SessionBranchSwitchActivity?
-    @ObservationIgnored
-    var nextSessionBranchSwitchGeneration: UInt64 = 0
+    
+    @Published var sessionBranchesRefreshGeneration: UInt64 = 0
+    @Published var sessionBranchSwitchActivity: SessionBranchSwitchActivity?
+    
+    @Published var nextSessionBranchSwitchGeneration: UInt64 = 0
 
     public private(set) var pendingRunCount: Int = 0
     public internal(set) var questionCards: [OpenClawQuestionCardModel] = []
-    var questionAttentionOwnerID = UUID()
+    @Published var questionAttentionOwnerID = UUID()
     public internal(set) var isQuestionAuthorityRetired = false
-    var questionRefreshGeneration: UInt64 = 0
-    var questionStateRevision: UInt64 = 0
-    var questionExpiryTasks: [String: Task<Void, Never>] = [:]
-    var questionExpiryDeadlines: [String: Date] = [:]
-    var questionRefreshRetryTask: Task<Void, Never>?
-    var questionRefreshRetryDelaysMs: [Int64] = [1000, 2000, 4000]
-    var hasActiveSessionRunWithoutChatSnapshot = false
-    var activeSessionRunIDs: [String] = []
-    var liveRunStateByRunID: [String: ChatLiveRunState] = [:]
-    var narration = ChatNarration()
+    @Published var questionRefreshGeneration: UInt64 = 0
+    @Published var questionStateRevision: UInt64 = 0
+    @Published var questionExpiryTasks: [String: Task<Void, Never>] = [:]
+    @Published var questionExpiryDeadlines: [String: Date] = [:]
+    @Published var questionRefreshRetryTask: Task<Void, Never>?
+    @Published var questionRefreshRetryDelaysMs: [Int64] = [1000, 2000, 4000]
+    @Published var hasActiveSessionRunWithoutChatSnapshot = false
+    @Published var activeSessionRunIDs: [String] = []
+    @Published var liveRunStateByRunID: [String: ChatLiveRunState] = [:]
+    @Published var narration = ChatNarration()
     public internal(set) var progressCard: ProgressCard?
-    var progressCardStoreAvailable: Bool?
-    @ObservationIgnored
-    var progressCardGeneration: UInt64 = 0
-    @ObservationIgnored
-    var preparedProgressCardTarget: (session: SessionSnapshot, generation: UInt64, target: OpenClawChatSessionTarget)?
-    @ObservationIgnored
-    var lastIssuedProgressCardRequestID: UInt64 = 0
-    @ObservationIgnored
-    var legacyProgressCardRevision = 0
+    @Published var progressCardStoreAvailable: Bool?
+    
+    @Published var progressCardGeneration: UInt64 = 0
+    
+    @Published var preparedProgressCardTarget: (session: SessionSnapshot, generation: UInt64, target: OpenClawChatSessionTarget)?
+    
+    @Published var lastIssuedProgressCardRequestID: UInt64 = 0
+    
+    @Published var legacyProgressCardRevision = 0
 
     public private(set) var sessionKey: String {
         didSet {
@@ -149,7 +148,7 @@ public final class OpenClawChatViewModel {
     public private(set) var streamingAssistantText: String?
 
     public private(set) var toolActivities: [OpenClawChatPendingToolCall] = []
-    private(set) var timelineRevision: UInt64 = 0
+    @Published private(set) var timelineRevision: UInt64 = 0
     public internal(set) var sessions: [OpenClawChatSessionEntry] = [] {
         didSet {
             syncContextUsageFraction()
@@ -158,16 +157,16 @@ public final class OpenClawChatViewModel {
     }
 
     public internal(set) var swarmSessions: [OpenClawChatSessionEntry] = []
-    var activeSwarmGroups: [OpenClawChatSwarmGroup] = []
-    var swarmActivityState = OpenClawChatSwarmActivityState()
-    @ObservationIgnored
-    var swarmRefreshGeneration: UInt64 = 0
-    @ObservationIgnored
-    var swarmSessionKey: String?
-    @ObservationIgnored
-    var swarmEnabled = false
-    @ObservationIgnored
-    var swarmRefreshTask: Task<Void, Never>?
+    @Published var activeSwarmGroups: [OpenClawChatSwarmGroup] = []
+    @Published var swarmActivityState = OpenClawChatSwarmActivityState()
+    
+    @Published var swarmRefreshGeneration: UInt64 = 0
+    
+    @Published var swarmSessionKey: String?
+    
+    @Published var swarmEnabled = false
+    
+    @Published var swarmRefreshTask: Task<Void, Never>?
 
     public internal(set) var contextUsageFraction: Double?
     let composerCapabilityState = OpenClawChatComposerCapabilityState()
@@ -176,16 +175,16 @@ public final class OpenClawChatViewModel {
     public internal(set) var isShowingCachedTranscript = false
     /// Guard the cache pre-paint: once a live response applied (even an empty
     /// one), a slow cache read must never paint stale rows over it.
-    var hasAppliedLiveHistory = false
-    var hasAppliedLiveSessions = false
-    @ObservationIgnored
-    var unreadPatchGuard = ChatSessionUnreadPatchGuard()
+    @Published var hasAppliedLiveHistory = false
+    @Published var hasAppliedLiveSessions = false
+    
+    @Published var unreadPatchGuard = ChatSessionUnreadPatchGuard()
     let unreadMutationQueue = ChatSessionUnreadMutationQueue()
     /// Internal for the outbox extension's flush path only.
     let defaultTransport: any OpenClawChatTransport
-    @ObservationIgnored
-    var scopedSessionTransport: (any OpenClawChatTransport)?
-    var explicitSessionAgentID: String?
+    
+    @Published var scopedSessionTransport: (any OpenClawChatTransport)?
+    @Published var explicitSessionAgentID: String?
     var transport: any OpenClawChatTransport {
         self.scopedSessionTransport ?? self.defaultTransport
     }
@@ -193,69 +192,69 @@ public final class OpenClawChatViewModel {
     let haptics: OpenClawChatHaptics
     let transcriptCache: (any OpenClawChatTranscriptCache)?
     let outbox: (any OpenClawChatCommandOutbox)?
-    @ObservationIgnored
+    
     let modelPickerStore: ChatModelPickerStore
     /// Per-message outbox display state; rows without an entry are normal
     /// transcript rows. Observable so bubbles update when flush progresses.
     public internal(set) var outboxStatesByMessageID: [UUID: OpenClawChatOutboxMessageState] = [:]
-    @ObservationIgnored
-    var outboxCommandIDsByMessageID: [UUID: String] = [:]
-    @ObservationIgnored
-    var outboxMessageIDsByCommandID: [String: UUID] = [:]
-    @ObservationIgnored
-    var outboxFailureVersionsByMessageID: [
+    
+    @Published var outboxCommandIDsByMessageID: [UUID: String] = [:]
+    
+    @Published var outboxMessageIDsByCommandID: [String: UUID] = [:]
+    
+    @Published var outboxFailureVersionsByMessageID: [
         UUID: (attemptVersion: Int, retryCount: Int, lastError: String?)
     ] = [:]
     /// Recent canonical keys let the MainActor resolve proof that arrives
     /// after SQLite cancellation commits but before its UI continuation runs.
-    @ObservationIgnored
-    var canonicalOutboxMessageKeys: [String] = []
-    @ObservationIgnored
-    var isFlushingOutbox = false
-    @ObservationIgnored
-    var isOutboxFlushRequestedWhileActive = false
-    @ObservationIgnored
-    var reconciledOutboxBranchScopes: Set<OpenClawChatOutboxScope> = []
-    @ObservationIgnored
-    var reconcilingOutboxBranchScopes: Set<OpenClawChatOutboxScope> = []
-    @ObservationIgnored
-    var outboxBranchReconcileRetryAttempts: [OpenClawChatOutboxScope: Int] = [:]
-    @ObservationIgnored
-    var outboxBranchReconcileRetryTasks: [OpenClawChatOutboxScope: Task<Void, Never>] = [:]
-    @ObservationIgnored
-    var outboxBranchConnectionGeneration: UInt64 = 0
-    @ObservationIgnored
-    var bootstrapOutboxBranchStateCapture: (
+    
+    @Published var canonicalOutboxMessageKeys: [String] = []
+    
+    @Published var isFlushingOutbox = false
+    
+    @Published var isOutboxFlushRequestedWhileActive = false
+    
+    @Published var reconciledOutboxBranchScopes: Set<OpenClawChatOutboxScope> = []
+    
+    @Published var reconcilingOutboxBranchScopes: Set<OpenClawChatOutboxScope> = []
+    
+    @Published var outboxBranchReconcileRetryAttempts: [OpenClawChatOutboxScope: Int] = [:]
+    
+    @Published var outboxBranchReconcileRetryTasks: [OpenClawChatOutboxScope: Task<Void, Never>] = [:]
+    
+    @Published var outboxBranchConnectionGeneration: UInt64 = 0
+    
+    @Published var bootstrapOutboxBranchStateCapture: (
         generation: UInt64,
         session: SessionSnapshot,
         task: Task<OpenClawChatOutboxBranchState?, Never>)?
-    @ObservationIgnored
-    var cancelingOutboxCommandIDs: Set<String> = []
-    @ObservationIgnored
-    var outboxPresentationGeneration: UInt64 = 0
-    @ObservationIgnored
-    var outboxChangesTask: Task<Void, Never>?
+    
+    @Published var cancelingOutboxCommandIDs: Set<String> = []
+    
+    @Published var outboxPresentationGeneration: UInt64 = 0
+    
+    @Published var outboxChangesTask: Task<Void, Never>?
     /// Backoff between failed flush attempts; internal so tests can shorten it.
-    @ObservationIgnored
-    var outboxRetryDelaysMs: [UInt64] = [2000, 8000]
+    
+    @Published var outboxRetryDelaysMs: [UInt64] = [2000, 8000]
     /// False until restoreOutboxMessages has adopted durable rows for the
     /// visible session. Until then the in-memory outbox state is blind to
     /// rows persisted by an earlier process, so the FIFO send gate must
     /// assume a backlog exists.
-    var hasRestoredOutboxMessages = false
-    @ObservationIgnored
+    @Published var hasRestoredOutboxMessages = false
+    
     nonisolated(unsafe) var outboxRetryTask: Task<Void, Never>?
     /// A command becomes terminally 'failed' after this many send attempts.
     nonisolated static let maxOutboxSendAttempts = 3
-    @ObservationIgnored
-    var pendingCacheWriteTask: Task<Void, Never>?
-    private(set) var activeAgentId: String?
-    private(set) var sessionRoutingContract: String?
+    
+    @Published var pendingCacheWriteTask: Task<Void, Never>?
+    @Published private(set) var activeAgentId: String?
+    @Published private(set) var sessionRoutingContract: String?
     var sessionDefaults: OpenClawChatSessionsDefaults? {
         didSet { syncContextUsageFraction() }
     }
 
-    var prefersExplicitThinkingLevel: Bool
+    @Published var prefersExplicitThinkingLevel: Bool
     private let onSessionChanged: (@MainActor (String) -> Void)?
     let onThinkingLevelChanged: (@MainActor @Sendable (String) -> Void)?
     let onThinkingPreferenceChanged: (@MainActor @Sendable (String?) -> Void)?
@@ -265,16 +264,16 @@ public final class OpenClawChatViewModel {
     let onToolActivity: OpenClawChatToolActivityHandler?
     let attachmentOwnerIsActive: @MainActor () -> Bool
 
-    @ObservationIgnored
+    
     private nonisolated(unsafe) var eventTask: Task<Void, Never>?
-    private(set) var isTransportDetached = false
-    @ObservationIgnored
+    @Published private(set) var isTransportDetached = false
+    
     private nonisolated(unsafe) var bootstrapTask: Task<Void, Never>?
-    @ObservationIgnored
-    var historyInvalidationRefresh: (requestID: UInt64, task: Task<Void, Never>)?
-    var runOwnershipGeneration: UInt64 = 0
-    var latestAppliedRunSnapshotRequestID: UInt64 = 0
-    var isApplyingRunSnapshot = false
+    
+    @Published var historyInvalidationRefresh: (requestID: UInt64, task: Task<Void, Never>)?
+    @Published var runOwnershipGeneration: UInt64 = 0
+    @Published var latestAppliedRunSnapshotRequestID: UInt64 = 0
+    @Published var isApplyingRunSnapshot = false
     var pendingRuns = Set<String>() {
         didSet {
             if self.pendingRuns != oldValue, !self.isApplyingRunSnapshot {
@@ -287,81 +286,81 @@ public final class OpenClawChatViewModel {
         }
     }
 
-    var pendingLocalUserEchoMessageIDsByRunID: [String: UUID] = [:]
+    @Published var pendingLocalUserEchoMessageIDsByRunID: [String: UUID] = [:]
     // Final chat events and durable session-message rows arrive independently.
     // Keep each provisional final scoped to the run's user turn so a later identical
     // answer in the same session does not adopt or suppress the wrong row.
-    var runMessageScopesByRunID: [String: RunMessageScope] = [:]
-    var provisionalFinalMessagesByID: [UUID: ProvisionalFinalMessage] = [:]
-    var sessionGeneration: UInt64 = 0
-    private var bootstrapGeneration: UInt64 = 0
+    @Published var runMessageScopesByRunID: [String: RunMessageScope] = [:]
+    @Published var provisionalFinalMessagesByID: [UUID: ProvisionalFinalMessage] = [:]
+    @Published var sessionGeneration: UInt64 = 0
+    @Published private var bootstrapGeneration: UInt64 = 0
     // A newer same-session history request only invalidates older responses after it applies.
     // Failed later refreshes must not drop the last successful pending-run history payload.
-    var lastIssuedHistoryRequestID: UInt64 = 0
-    var latestAppliedHistoryRequestID: UInt64 = 0
-    var historyMutationGeneration: UInt64 = 0
-    private var nextSessionsFetchRequestID: UInt64 = 0
-    private var latestAppliedSessionsFetchRequestID: UInt64 = 0
+    @Published var lastIssuedHistoryRequestID: UInt64 = 0
+    @Published var latestAppliedHistoryRequestID: UInt64 = 0
+    @Published var historyMutationGeneration: UInt64 = 0
+    @Published private var nextSessionsFetchRequestID: UInt64 = 0
+    @Published private var latestAppliedSessionsFetchRequestID: UInt64 = 0
     /// Outbox replay waits for a sessions list from the current connection generation.
-    var sessionMetadataGeneration: UInt64 = 0
-    var readySessionMetadataGeneration: UInt64?
+    @Published var sessionMetadataGeneration: UInt64 = 0
+    @Published var readySessionMetadataGeneration: UInt64?
 
-    @ObservationIgnored
+    
     nonisolated(unsafe) var pendingRunOwnerTasks: [String: Task<Void, Never>] = [:]
-    var nextPendingRunOwnerArmID: UInt64 = 0
-    var pendingRunOwnerArmIDs: [String: UInt64] = [:]
-    @ObservationIgnored
+    @Published var nextPendingRunOwnerArmID: UInt64 = 0
+    @Published var pendingRunOwnerArmIDs: [String: UInt64] = [:]
+    
     nonisolated(unsafe) var activeSessionRunIndicatorTimeoutTask: Task<Void, Never>?
-    var pendingRunWaitTimeoutMs: UInt64 = 120_000
-    var pendingRunUnavailableRetryMs: UInt64 = 30000
-    var pendingRunTerminalRetryMs: UInt64 = 2000
-    var pendingRunTerminalHistoryGraceMs: UInt64 = 10000
-    var pendingRunRefreshDelaysMs: [UInt64] = [
+    @Published var pendingRunWaitTimeoutMs: UInt64 = 120_000
+    @Published var pendingRunUnavailableRetryMs: UInt64 = 30000
+    @Published var pendingRunTerminalRetryMs: UInt64 = 2000
+    @Published var pendingRunTerminalHistoryGraceMs: UInt64 = 10000
+    @Published var pendingRunRefreshDelaysMs: [UInt64] = [
         1500,
         4000,
         9000,
         20000,
         45000,
     ]
-    var pendingRunSteadyRefreshDelayMs: UInt64 = 60000
+    @Published var pendingRunSteadyRefreshDelayMs: UInt64 = 60000
     // Session switches can overlap in-flight picker patches, so stale completions
     // must compare against the latest request and latest desired value for that session.
-    private var nextSessionSettingsRequestID: UInt64 = 0
-    private var latestModelSelectionRequestIDsByTarget: [ModelPatchTarget: UInt64] = [:]
-    private var lastSuccessfulModelSelectionIDsByTarget: [ModelPatchTarget: String] = [:]
-    var lastSuccessfulSettingsPatchRequestIDsByTarget: [ModelPatchTarget: UInt64] = [:]
+    @Published private var nextSessionSettingsRequestID: UInt64 = 0
+    @Published private var latestModelSelectionRequestIDsByTarget: [ModelPatchTarget: UInt64] = [:]
+    @Published private var lastSuccessfulModelSelectionIDsByTarget: [ModelPatchTarget: String] = [:]
+    @Published var lastSuccessfulSettingsPatchRequestIDsByTarget: [ModelPatchTarget: UInt64] = [:]
     /// Rollback and pre-refresh sends need the authoritative state from the latest settings patch.
-    var lastSuccessfulSettingsPatchResultsByTarget: [ModelPatchTarget: OpenClawChatModelPatchResult] = [:]
-    var completedModelPatchTargets: Set<ModelPatchTarget> = []
-    var inFlightSettingsPatchCountsByTarget: [ModelPatchTarget: Int] = [:]
-    var capabilityPatchFailureRevisionsByTarget: [ModelPatchTarget: UInt64] = [:]
-    var capabilityPatchFailureMessagesByTarget: [ModelPatchTarget: String] = [:]
-    var confirmedCapabilityToolOverridesByTarget: [ModelPatchTarget: ToolOverridesState] = [:]
-    var settingsPatchRevisionsByTarget: [ModelPatchTarget: UInt64] = [:]
-    private var settingsPatchWaitersByTarget: [ModelPatchTarget: [CheckedContinuation<Void, Never>]] = [:]
-    @ObservationIgnored
-    private var settingsPatchTailsByTarget: [ModelPatchTarget: SettingsPatchTail] = [:]
-    var nextThinkingSelectionRequestID: UInt64 = 0
-    var latestThinkingSelectionRequestIDsByTarget: [ModelPatchTarget: UInt64] = [:]
-    var confirmedThinkingPreference: ThinkingPreferenceState
-    var emittedThinkingPreference: ThinkingPreferenceState
-    var thinkingPreferenceRequests: [UInt64: ThinkingPreferenceRequest] = [:]
-    var nextVerboseSelectionRequestID: UInt64 = 0
-    var confirmedVerbosePreference: VerbosePreferenceState
-    var emittedVerbosePreference: VerbosePreferenceState
-    var verbosePreferenceRequests: [UInt64: VerbosePreferenceRequest] = [:]
-    var acceptedVerboseLevelsByTarget: [ModelPatchTarget: VerboseLevelState] = [:]
-    var acceptedFastModesByTarget: [ModelPatchTarget: FastModeState] = [:]
-    var lastSuccessfulThinkingOverrideClearedByTarget: [ModelPatchTarget: Bool] = [:]
-    var lastSuccessfulFastOverrideClearedByTarget: [ModelPatchTarget: Bool] = [:]
-    var lastSuccessfulVerboseOverrideClearedByTarget: [ModelPatchTarget: Bool] = [:]
-    var acceptedSettingsPatchResultsByTarget: [ModelPatchTarget: OpenClawChatModelPatchResult] = [:]
-    var acceptedThinkingLevelsByTarget: [ModelPatchTarget: String] = [:]
-    var acceptedPreferredThinkingLevelsByTarget: [ModelPatchTarget: String] = [:]
-    var acceptedExplicitThinkingPreferencesByTarget: [ModelPatchTarget: Bool] = [:]
-    var acceptedThinkingOverrideClearedByTarget: [ModelPatchTarget: Bool] = [:]
-    private(set) var isCompacting = false
-    private var lastCompactAt: Date?
+    @Published var lastSuccessfulSettingsPatchResultsByTarget: [ModelPatchTarget: OpenClawChatModelPatchResult] = [:]
+    @Published var completedModelPatchTargets: Set<ModelPatchTarget> = []
+    @Published var inFlightSettingsPatchCountsByTarget: [ModelPatchTarget: Int] = [:]
+    @Published var capabilityPatchFailureRevisionsByTarget: [ModelPatchTarget: UInt64] = [:]
+    @Published var capabilityPatchFailureMessagesByTarget: [ModelPatchTarget: String] = [:]
+    @Published var confirmedCapabilityToolOverridesByTarget: [ModelPatchTarget: ToolOverridesState] = [:]
+    @Published var settingsPatchRevisionsByTarget: [ModelPatchTarget: UInt64] = [:]
+    @Published private var settingsPatchWaitersByTarget: [ModelPatchTarget: [CheckedContinuation<Void, Never>]] = [:]
+    
+    @Published private var settingsPatchTailsByTarget: [ModelPatchTarget: SettingsPatchTail] = [:]
+    @Published var nextThinkingSelectionRequestID: UInt64 = 0
+    @Published var latestThinkingSelectionRequestIDsByTarget: [ModelPatchTarget: UInt64] = [:]
+    @Published var confirmedThinkingPreference: ThinkingPreferenceState
+    @Published var emittedThinkingPreference: ThinkingPreferenceState
+    @Published var thinkingPreferenceRequests: [UInt64: ThinkingPreferenceRequest] = [:]
+    @Published var nextVerboseSelectionRequestID: UInt64 = 0
+    @Published var confirmedVerbosePreference: VerbosePreferenceState
+    @Published var emittedVerbosePreference: VerbosePreferenceState
+    @Published var verbosePreferenceRequests: [UInt64: VerbosePreferenceRequest] = [:]
+    @Published var acceptedVerboseLevelsByTarget: [ModelPatchTarget: VerboseLevelState] = [:]
+    @Published var acceptedFastModesByTarget: [ModelPatchTarget: FastModeState] = [:]
+    @Published var lastSuccessfulThinkingOverrideClearedByTarget: [ModelPatchTarget: Bool] = [:]
+    @Published var lastSuccessfulFastOverrideClearedByTarget: [ModelPatchTarget: Bool] = [:]
+    @Published var lastSuccessfulVerboseOverrideClearedByTarget: [ModelPatchTarget: Bool] = [:]
+    @Published var acceptedSettingsPatchResultsByTarget: [ModelPatchTarget: OpenClawChatModelPatchResult] = [:]
+    @Published var acceptedThinkingLevelsByTarget: [ModelPatchTarget: String] = [:]
+    @Published var acceptedPreferredThinkingLevelsByTarget: [ModelPatchTarget: String] = [:]
+    @Published var acceptedExplicitThinkingPreferencesByTarget: [ModelPatchTarget: Bool] = [:]
+    @Published var acceptedThinkingOverrideClearedByTarget: [ModelPatchTarget: Bool] = [:]
+    @Published private(set) var isCompacting = false
+    @Published private var lastCompactAt: Date?
     private let compactCooldown: TimeInterval = 60
 
     private enum SessionSwitchIntent {
@@ -440,8 +439,8 @@ public final class OpenClawChatViewModel {
     }
 
     private struct BootstrapContext {
-        var id: UInt64
-        var historyRequest: HistoryRequest
+        @Published var id: UInt64
+        @Published var historyRequest: HistoryRequest
 
         var session: SessionSnapshot {
             self.historyRequest.session
@@ -449,14 +448,14 @@ public final class OpenClawChatViewModel {
     }
 
     struct HistoryRequest {
-        var id: UInt64
-        var session: SessionSnapshot
-        var pendingRunIDs: Set<String>
-        var visibleMessagesByID: [UUID: OpenClawChatMessage]
-        var historyMutationGeneration: UInt64
-        var progressCardGeneration: UInt64
-        var runOwnershipGeneration: UInt64
-        var latestUserTurn: LatestUserTurn?
+        @Published var id: UInt64
+        @Published var session: SessionSnapshot
+        @Published var pendingRunIDs: Set<String>
+        @Published var visibleMessagesByID: [UUID: OpenClawChatMessage]
+        @Published var historyMutationGeneration: UInt64
+        @Published var progressCardGeneration: UInt64
+        @Published var runOwnershipGeneration: UInt64
+        @Published var latestUserTurn: LatestUserTurn?
     }
 
     struct RunHistoryRefreshResult {
@@ -465,7 +464,7 @@ public final class OpenClawChatViewModel {
         let supportsInFlightRunState: Bool
         let hasInFlightRun: Bool
         let sessionHasActiveRun: Bool
-        var retryAfterMs: Int?
+        @Published var retryAfterMs: Int?
 
         static let failed = RunHistoryRefreshResult(
             applied: false,
@@ -476,21 +475,21 @@ public final class OpenClawChatViewModel {
     }
 
     struct LatestUserTurn {
-        var idempotencyKey: String?
-        var refreshKey: String?
-        var occurrence: Int
-        var timestamp: Double?
+        @Published var idempotencyKey: String?
+        @Published var refreshKey: String?
+        @Published var occurrence: Int
+        @Published var timestamp: Double?
     }
 
     struct RunMessageScope {
-        var session: SessionSnapshot
-        var latestUserTurn: LatestUserTurn?
+        @Published var session: SessionSnapshot
+        @Published var latestUserTurn: LatestUserTurn?
     }
 
     struct ProvisionalFinalMessage {
-        var reconciliationKey: String
-        var runId: String?
-        var scope: RunMessageScope
+        @Published var reconciliationKey: String
+        @Published var runId: String?
+        @Published var scope: RunMessageScope
     }
 
     var turnToolCallsById: [String: OpenClawChatPendingToolCall] = [:] {
@@ -501,7 +500,7 @@ public final class OpenClawChatViewModel {
         }
     }
 
-    var lastHealthPollAt: Date?
+    @Published var lastHealthPollAt: Date?
 
     public init(
         sessionKey: String,
@@ -742,7 +741,7 @@ public final class OpenClawChatViewModel {
     public var showsModelPicker: Bool {
         !self.modelChoices.isEmpty
     }
-}
+
 
 extension OpenClawChatViewModel {
     // MARK: - Internals

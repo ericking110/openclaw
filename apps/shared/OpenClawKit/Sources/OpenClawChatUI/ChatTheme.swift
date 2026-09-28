@@ -1,7 +1,14 @@
 import SwiftUI
 
+private struct OpenclawchatdesktoplayoutKey: EnvironmentKey {
+    static let defaultValue: Bool = false
+}
+
 extension EnvironmentValues {
-    @Entry public var openClawChatDesktopLayout = false
+    var openClawChatDesktopLayout: Bool {
+        get { self[OpenclawchatdesktoplayoutKey.self] }
+        set { self[OpenclawchatdesktoplayoutKey.self] = newValue }
+    }
 }
 
 #if os(macOS)

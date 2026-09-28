@@ -1306,13 +1306,13 @@ private struct ChatStreamingAssistantTextBody: View {
                 }
             }
         }
-        .onChange(of: self.inputSnapshot.sourceText) { _, _ in
+        .onChange(of: self.inputSnapshot.sourceText) { _ in
             self.updateSnapshot()
         }
-        .onChange(of: self.inputSnapshot.includesThinking) { _, _ in
+        .onChange(of: self.inputSnapshot.includesThinking) { _ in
             self.updateSnapshot()
         }
-        .onChange(of: self.reduceMotion) { _, reduceMotion in
+        .onChange(of: self.reduceMotion) { reduceMotion in
             self.pendingUntil = reduceMotion ? nil : self.futureDeadline()
         }
         .onAppear {

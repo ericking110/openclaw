@@ -1,11 +1,10 @@
 import Foundation
-import Observation
+import Combine
 import OpenClawKit
 
 /// One ingress session per authority; matching Access applications share a browser attempt.
 @MainActor
-@Observable
-final class CloudflareAccessSessionStore {
+final class CloudflareAccessSessionStore: ObservableObject {
     struct Snapshot: Sendable {
         let session: CloudflareAccessSession
         let revision: UInt64
@@ -19,9 +18,9 @@ final class CloudflareAccessSessionStore {
     }
 
     struct Persistence {
-        var load: (CloudflareAccessOrigin) -> String?
-        var save: (CloudflareAccessOrigin, String) -> Bool
-        var delete: (CloudflareAccessOrigin) -> Bool
+        @Published var load: (CloudflareAccessOrigin) -> String?
+        @Published var save: (CloudflareAccessOrigin, String) -> Bool
+        @Published var delete: (CloudflareAccessOrigin) -> Bool
 
         static var keychain: Self {
             let service = "\(Bundle.main.bundleIdentifier ?? "ai.openclaw.ios").cloudflare-access"
@@ -48,14 +47,14 @@ final class CloudflareAccessSessionStore {
     }
 
     private(set) var revision: UInt64 = 0
-    @ObservationIgnored private var sessions: [CloudflareAccessOrigin: Snapshot] = [:]
-    @ObservationIgnored private var states: [CloudflareAccessOrigin: State] = [:]
-    @ObservationIgnored private var attempts: [CloudflareAccessOrigin: Attempt] = [:]
-    @ObservationIgnored private var retirements: [CloudflareAccessOrigin: Retirement] = [:]
-    @ObservationIgnored private let persistence: Persistence
-    @ObservationIgnored private let authenticate: Authenticate
-    @ObservationIgnored private let retireTransports: (CloudflareAccessOrigin) async -> Void
-    @ObservationIgnored private let now: () -> Date
+    private var sessions: [CloudflareAccessOrigin: Snapshot] = [:]
+    private var states: [CloudflareAccessOrigin: State] = [:]
+    private var attempts: [CloudflareAccessOrigin: Attempt] = [:]
+    private var retirements: [CloudflareAccessOrigin: Retirement] = [:]
+    private let persistence: Persistence
+    private let authenticate: Authenticate
+    private let retireTransports: (CloudflareAccessOrigin) async -> Void
+    private let now: () -> Date
 
     init(
         persistence: Persistence = .keychain,

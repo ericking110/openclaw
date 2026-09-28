@@ -3,7 +3,7 @@ import AVFAudio
 import AVFoundation
 #endif
 import Foundation
-import Observation
+import Combine
 import OpenClawKit
 
 private let voiceNoteMaximumDurationSeconds: TimeInterval = 180
@@ -50,8 +50,7 @@ public struct OpenClawVoiceNoteRecording: Equatable, Sendable {
 
 /// Main-actor voice-note recorder with explicit permission and capture states.
 @MainActor
-@Observable
-public final class OpenClawVoiceNoteRecorder {
+public final class OpenClawVoiceNoteRecorder: ObservableObject{
     public enum State: Equatable {
         case idle
         case requestingPermission
@@ -68,14 +67,14 @@ public final class OpenClawVoiceNoteRecorder {
     /// Live capture level in 0...1 while recording; drives the recording waveform.
     public private(set) var level: Double = 0
 
-    @ObservationIgnored public var onRecordingActiveChanged: (@MainActor (Bool) -> Void)?
+    public var onRecordingActiveChanged: (@MainActor (Bool) -> Void)?
 
-    @ObservationIgnored private let capture: any VoiceNoteAudioCapture
-    @ObservationIgnored private let durationLimit: TimeInterval
-    @ObservationIgnored private let timerIntervalNanoseconds: UInt64
-    @ObservationIgnored private let now: () -> Date
-    @ObservationIgnored private var timerTask: Task<Void, Never>?
-    @ObservationIgnored private var captureAdmissionHandler: @MainActor () -> Bool = { true }
+    private let capture: any VoiceNoteAudioCapture
+    private let durationLimit: TimeInterval
+    private let timerIntervalNanoseconds: UInt64
+    private let now: () -> Date
+    private var timerTask: Task<Void, Never>?
+    private var captureAdmissionHandler: @MainActor () -> Bool = { true }
 
     /// Creates a recorder backed by the system audio recorder.
     public convenience init() {
@@ -275,7 +274,7 @@ public final class OpenClawVoiceNoteRecorder {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("voice-note-\(UUID().uuidString).m4a")
     }
-}
+
 
 /// AVAudioRecorder-backed AAC voice-note capture.
 @MainActor

@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Session-scoped dashboard rendered by the gateway Control UI.
 struct SessionDashboardScreen: View {
-    @Environment(NodeAppModel.self) private var appModel
+    @EnvironmentObject private var appModel: NodeAppModel
     @Environment(\.dismiss) private var dismiss
     @State private var showsDesktop = false
     let sessionKey: String

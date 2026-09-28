@@ -7,8 +7,8 @@ import Network
 #endif
 
 struct GatewayQuickSetupSheet: View {
-    @Environment(NodeAppModel.self) private var appModel
-    @Environment(GatewayConnectionController.self) private var gatewayController
+    @EnvironmentObject private var appModel: NodeAppModel
+    @EnvironmentObject private var gatewayController: GatewayConnectionController
     @Environment(\.dismiss) private var dismiss
 
     let onUseManualSetup: () -> Void
@@ -497,8 +497,8 @@ private struct GatewayQuickSetupPreviewHost: View {
 
     var body: some View {
         GatewayQuickSetupSheet()
-            .environment(self.appModel)
-            .environment(self.gatewayController)
+            .environmentObject(self.appModel)
+            .environmentObject(self.gatewayController)
             .openClawSheetChrome()
     }
 }

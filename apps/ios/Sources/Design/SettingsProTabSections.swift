@@ -508,7 +508,7 @@ extension SettingsProTab {
     @ViewBuilder var licensesDestination: some View {
         let documents = LicenseDocumentLoader.bundledDocuments()
         if documents.isEmpty {
-            ContentUnavailableView(
+            contentUnavailableView(
                 "No Licenses Bundled",
                 systemImage: "doc.text",
                 description: Text("License files are not available in this build."))
@@ -1002,7 +1002,7 @@ extension SettingsProTab {
         .accessibilityValue(isOn.wrappedValue
             ? String(localized: "On")
             : String(localized: "Off"))
-        .onChange(of: isOn.wrappedValue) { _, enabled in
+        .onChange(of: isOn.wrappedValue) { enabled in
             onChange?(enabled)
         }
     }

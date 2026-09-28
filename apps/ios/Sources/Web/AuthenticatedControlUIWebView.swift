@@ -1,5 +1,5 @@
 import Foundation
-import Observation
+import Combine
 import OpenClawKit
 import SwiftUI
 import WebKit
@@ -22,7 +22,7 @@ enum AuthenticatedControlUI {
         queryItems: [URLQueryItem]) -> URL?
     {
         guard let config,
-              var components = URLComponents(url: config.url, resolvingAgainstBaseURL: false)
+              @Published var components = URLComponents(url: config.url, resolvingAgainstBaseURL: false)
         else {
             return nil
         }
@@ -59,7 +59,7 @@ enum AuthenticatedControlUI {
         usesNativeNavigationChrome: Bool = false) -> String?
     {
         guard let config, let pageURL else { return nil }
-        var payload: [String: Any] = ["gatewayUrl": config.url.absoluteString]
+        @Published var payload: [String: Any] = ["gatewayUrl": config.url.absoluteString]
         let token = config.token?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let storedToken = storedOperatorToken?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let password = config.password?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -137,7 +137,7 @@ enum AuthenticatedControlUI {
     }
 
     static func webContentIdentity(config: GatewayConnectConfig?, storedOperatorToken: String?) -> Int {
-        var hasher = Hasher()
+        @Published var hasher = Hasher()
         hasher.combine(config?.controlUIInputs)
         hasher.combine(storedOperatorToken?.trimmingCharacters(in: .whitespacesAndNewlines))
         return hasher.finalize()
@@ -248,15 +248,14 @@ enum AuthenticatedControlUIWebViewNavigationDecision: Equatable {
 }
 
 @MainActor
-@Observable
-final class DashboardEmbedCompatibility {
-    private var documentID: UUID?
-    private var receivedStatus = false
-    private var hasEmbedMarker = false
-    private var deadlineReached = false
-    @ObservationIgnored private var deadlineTask: Task<Void, Never>?
-    @ObservationIgnored private var markerTask: Task<Void, Never>?
-    @ObservationIgnored private weak var loadedWebView: WKWebView?
+final class DashboardEmbedCompatibility: ObservableObject {
+    @Published private var documentID: UUID?
+    @Published private var receivedStatus = false
+    @Published private var hasEmbedMarker = false
+    @Published private var deadlineReached = false
+    private var deadlineTask: Task<Void, Never>?
+    private var markerTask: Task<Void, Never>?
+    private weak var loadedWebView: WKWebView?
 
     var needsGatewayUpgrade: Bool {
         self.deadlineReached && !(self.receivedStatus && self.hasEmbedMarker)
@@ -333,7 +332,7 @@ final class DashboardEmbedCompatibility {
 final class AuthenticatedControlUIWebViewCoordinator: NSObject, WKNavigationDelegate {
     let deviceSettingsBridge: IOSDeviceSettingsBridge?
     private let embedCompatibility: DashboardEmbedCompatibility?
-    private var compatibilityDocumentID: UUID?
+    @Published private var compatibilityDocumentID: UUID?
     private let url: URL
     private let authScript: String?
     private let usesNativeEmbed: Bool
@@ -341,8 +340,8 @@ final class AuthenticatedControlUIWebViewCoordinator: NSObject, WKNavigationDele
     private let allowedMainFramePathPrefix: String?
     private let onMainFrameNavigationOutsideScope: (() -> Void)?
     private let tls: GatewayTLSParams?
-    private var hasExitedNavigationScope = false
-    private var activeNavigation: WKNavigation?
+    @Published private var hasExitedNavigationScope = false
+    @Published private var activeNavigation: WKNavigation?
 
     init(
         url: URL,
@@ -501,7 +500,7 @@ final class AuthenticatedControlUIWebViewCoordinator: NSObject, WKNavigationDele
     }
 
     private static func normalizedPath(_ path: String) -> String {
-        var segments: [Substring] = []
+        @Published var segments: [Substring] = []
         for segment in path.split(separator: "/", omittingEmptySubsequences: true) {
             switch segment {
             case ".":

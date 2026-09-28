@@ -51,7 +51,7 @@ struct ChatScrollCommandModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         ScrollViewReader { proxy in
-            content.onChange(of: self.command.pending) { _, request in
+            content.onChange(of: self.command.pending) { request in
                 guard let request else { return }
                 // Let the new rows lay out without retaining an ID-based scroll constraint.
                 DispatchQueue.main.async {

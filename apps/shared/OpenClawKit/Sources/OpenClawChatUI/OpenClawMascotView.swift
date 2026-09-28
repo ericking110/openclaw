@@ -88,10 +88,10 @@ public struct OpenClawMascotView: View {
                     }
             }
         }
-        .onChange(of: self.mood) { _, newMood in
+        .onChange(of: self.mood) { newMood in
             self.animator.setMood(newMood, at: self.now())
         }
-        .onChange(of: self.accessory) { _, newAccessory in
+        .onChange(of: self.accessory) { newAccessory in
             self.animator.setAccessory(newAccessory, at: self.now())
         }
         .onAppear {

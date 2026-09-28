@@ -104,9 +104,9 @@ public struct OpenClawChatEffortControl: View {
             .accessibilityLabel("Effort")
             .accessibilityValue(self.accessibilityValue)
             .accessibilityIdentifier("chat-composer-inline-effort")
-            .onChange(of: self.thinkingOptions) { _, _ in self.previewIndex = nil }
-            .onChange(of: self.thinkingLevel) { _, _ in self.previewIndex = nil }
-            .onChange(of: self.isEnabled) { _, _ in self.previewIndex = nil }
+            .onChange(of: self.thinkingOptions) { _ in self.previewIndex = nil }
+            .onChange(of: self.thinkingLevel) { _ in self.previewIndex = nil }
+            .onChange(of: self.isEnabled) { _ in self.previewIndex = nil }
         }
     }
 
@@ -349,7 +349,7 @@ private struct ChatEffortSlider: View {
         .frame(height: 26)
         .focusable()
         .focused(self.$isFocused)
-        .focusEffectDisabled()
+        .backportFocusEffectDisabled()
         .onMoveCommand { direction in
             switch direction {
             case .left, .down: self.onCommit(max(0, self.index - 1))

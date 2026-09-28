@@ -189,7 +189,7 @@ private struct OnboardingCommandChip: View {
                     .foregroundStyle(
                         self.didCopy ? OpenClawBrand.activationPrimaryAction : Color.secondary.opacity(0.56))
                     .frame(width: 38, height: 38)
-                    .contentTransition(.symbolEffect(.replace))
+                    .modifier(SymbolReplaceTransition())
             }
             .buttonStyle(.plain)
             .contentShape(Rectangle())

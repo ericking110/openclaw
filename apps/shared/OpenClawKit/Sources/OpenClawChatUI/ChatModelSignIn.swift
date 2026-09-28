@@ -1,5 +1,5 @@
 import Foundation
-import Observation
+import Combine
 import OpenClawKit
 import OpenClawProtocol
 import SwiftUI
@@ -63,21 +63,20 @@ struct ChatModelAuthStatus: Decodable {
 }
 
 @MainActor
-@Observable
-final class ChatModelSignInModel {
-    private(set) var authStatus: ChatModelAuthStatus?
-    private(set) var step: WizardStep?
-    private(set) var sessionID: String?
-    private(set) var busy = false
-    private(set) var cancelling = false
-    private(set) var message: String?
-    var text = ""
-    var selection = 0
-    var confirmation = false
+final class ChatModelSignInModel: ObservableObject{
+    @Published private(set) var authStatus: ChatModelAuthStatus?
+    @Published private(set) var step: WizardStep?
+    @Published private(set) var sessionID: String?
+    @Published private(set) var busy = false
+    @Published private(set) var cancelling = false
+    @Published private(set) var message: String?
+    @Published var text = ""
+    @Published var selection = 0
+    @Published var confirmation = false
     private let context: OpenClawChatModelSignInContext
     private let onAuthChanged: @MainActor () async -> Void
-    private var closed = false
-    private var cancelRequested = false
+    @Published private var closed = false
+    @Published private var cancelRequested = false
 
     init(context: OpenClawChatModelSignInContext, onAuthChanged: @escaping @MainActor () async -> Void) {
         self.context = context
@@ -139,7 +138,7 @@ final class ChatModelSignInModel {
 
     func answer() async {
         guard let id = self.sessionID, !self.busy, !self.cancelling, !self.closed else { return }
-        var params = ["sessionId": AnyCodable(id)]
+        @Published var params = ["sessionId": AnyCodable(id)]
         if let step = self.step, wizardStepExecutor(step) != "gateway" {
             let value: AnyCodable? = switch wizardStepType(step) {
             case "text": AnyCodable(self.text)
@@ -148,7 +147,7 @@ final class ChatModelSignInModel {
                 ? parseWizardOptions(step.options)[self.selection].value : nil
             default: nil
             }
-            var answer = ["stepId": AnyCodable(step.id)]
+            @Published var answer = ["stepId": AnyCodable(step.id)]
             if let value { answer["value"] = value }
             params["answer"] = AnyCodable(answer)
         }
@@ -216,7 +215,7 @@ final class ChatModelSignInModel {
     }
 
     private func advance(_ id: String, result first: WizardNextResult) async throws {
-        var result = first
+        @Published var result = first
         while !self.closed, self.sessionID == id, !self.cancelRequested {
             if result.done {
                 await self.finish(id, status: wizardStatusString(result.status), error: result.error)
@@ -280,7 +279,7 @@ final class ChatModelSignInModel {
         guard await self.context.isCurrent(), !self.closed else { throw CancellationError() }
         return data
     }
-}
+
 
 @MainActor
 struct OpenClawChatModelSignInSheet: View {
@@ -357,7 +356,7 @@ struct OpenClawChatModelSignInSheet: View {
 
     @ViewBuilder
     private func wizardStep(_ step: WizardStep) -> some View {
-        @Bindable var model = self.model
+        @ObservedObject var model = self.model
         if let title = step.title { Text(title).font(OpenClawChatTypography.headline) }
         if let message = step.message {
             Text(message).font(OpenClawChatTypography.callout).textSelection(.enabled)

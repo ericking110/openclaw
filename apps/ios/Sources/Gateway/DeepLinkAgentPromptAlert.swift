@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct DeepLinkAgentPromptAlert: ViewModifier {
-    @Environment(NodeAppModel.self) private var appModel: NodeAppModel
+    @EnvironmentObject private var appModel: NodeAppModel: NodeAppModel
 
     private var promptBinding: Binding<NodeAppModel.AgentDeepLinkPrompt?> {
         Binding(

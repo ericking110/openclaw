@@ -1,4 +1,3 @@
-import Observation
 
 /// Keeps Talk's ActivityKit presentation alive independently of whichever app
 /// surface is mounted. Chat, Control, and iPad can all start Talk, so no view
@@ -17,7 +16,7 @@ final class VoiceLiveActivityCoordinator {
 
     private func observePresentationState() {
         guard let appModel else { return }
-        withObservationTracking {
+        backportObservationTracking({
             _ = appModel.talkMode.isEnabled
             _ = appModel.talkMode.statusText
             _ = appModel.talkMode.isSpeaking
@@ -25,29 +24,29 @@ final class VoiceLiveActivityCoordinator {
             _ = appModel.chatSessionKey
             _ = appModel.chatAgentName
             _ = appModel.chatAgentAvatarText
-        } onChange: { [weak self] in
+        }, onChange: { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
                 self.syncPresentation()
                 self.observePresentationState()
             }
-        }
+        })
     }
 
     private func observeAudioLevel() {
         guard let appModel else { return }
-        withObservationTracking {
+        backportObservationTracking({
             _ = appModel.talkMode.isSpeaking
             _ = appModel.talkMode.isListening
             _ = appModel.talkMode.playbackLevel
             _ = appModel.talkMode.micLevel
-        } onChange: { [weak self] in
+        }, onChange: { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
                 self.syncAudioLevel()
                 self.observeAudioLevel()
             }
-        }
+        })
     }
 
     private func syncPresentation() {

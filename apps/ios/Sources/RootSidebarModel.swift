@@ -1,5 +1,5 @@
 import Foundation
-import Observation
+import Combine
 import OpenClawChatUI
 import OpenClawKit
 import OpenClawProtocol
@@ -29,11 +29,11 @@ struct ChatSessionRosterSnapshot: Sendable {
     static func collect(
         fetchPage: @MainActor (Int) async throws -> OpenClawChatSessionsListResponse) async throws -> Self
     {
-        var sessions: [OpenClawChatSessionEntry] = []
-        var rowIndices: [String: Int] = [:]
-        var totalCount: Int?
-        var offset = 0
-        var pageCount = 0
+        @Published var sessions: [OpenClawChatSessionEntry] = []
+        @Published var rowIndices: [String: Int] = [:]
+        @Published var totalCount: Int?
+        @Published var offset = 0
+        @Published var pageCount = 0
 
         while true {
             try Task.checkCancellation()
@@ -169,8 +169,7 @@ extension NodeAppModel {
 }
 
 @MainActor
-@Observable
-final class RootSidebarModel {
+final class RootSidebarModel: ObservableObject {
     static let sessionLimit = 200
 
     struct TokenUsageSummary: Equatable {
@@ -190,12 +189,12 @@ final class RootSidebarModel {
     private(set) var isRefreshing = false
     private(set) var sessionErrorText: String?
     private(set) var isSessionRosterComplete = true
-    private var rosterGeneration = 0
-    private var dashboardGeneration = 0
-    private var sessionObserverVisibility = false
-    private var sessionObserverGeneration: UInt64 = 0
-    private var sessionObserverDeclaration: SessionObserverDeclaration<GatewayNodeSessionRoute>?
-    private var sessionObserverSync: (id: UUID, task: Task<Void, Never>)?
+    @Published private var rosterGeneration = 0
+    @Published private var dashboardGeneration = 0
+    @Published private var sessionObserverVisibility = false
+    @Published private var sessionObserverGeneration: UInt64 = 0
+    @Published private var sessionObserverDeclaration: SessionObserverDeclaration<GatewayNodeSessionRoute>?
+    @Published private var sessionObserverSync: (id: UUID, task: Task<Void, Never>)?
 
     var failedCronJobCount: Int {
         self.cronJobs.count { Self.isFailedCronJob($0) }
@@ -410,7 +409,7 @@ final class RootSidebarModel {
             try await Task.sleep(for: delay)
         }) async
     {
-        var failureCount = 0
+        @Published var failureCount = 0
         while !Task.isCancelled {
             // Register the local continuation before the RPC. The gateway may
             // synchronously emit a one-off final digest while handling subscribe.

@@ -1,6 +1,6 @@
 import AVFoundation
 import Foundation
-import Observation
+import Combine
 import UniformTypeIdentifiers
 
 /// Gateway-rendered audio for one transcript message.
@@ -86,8 +86,7 @@ protocol ChatSpeechLocalSpeaking: AnyObject {
 /// Drives the transcript "Listen" action: one message speaks at a time,
 /// gateway audio first, on-device synthesis as the fallback voice.
 @MainActor
-@Observable
-public final class OpenClawChatSpeechController: ChatMediaPlaybackOwner {
+public final class OpenClawChatSpeechController: ObservableObject{
     public enum Phase: Equatable {
         case idle
         case preparing(UUID)
@@ -100,10 +99,10 @@ public final class OpenClawChatSpeechController: ChatMediaPlaybackOwner {
     private let clipPlayer: any ChatSpeechClipPlaying
     private let localSpeech: any ChatSpeechLocalSpeaking
     private let playbackCoordinator: ChatMediaPlaybackCoordinator
-    @ObservationIgnored private var playbackTask: Task<Void, Never>?
+    private var playbackTask: Task<Void, Never>?
     /// Monotonic token: completions from a superseded playback must not
     /// clear the phase owned by a newer one.
-    @ObservationIgnored private var generation: UInt64 = 0
+    private var generation: UInt64 = 0
 
     public convenience init(synthesize: @escaping OpenClawChatSpeechSynthesis) {
         self.init(
@@ -227,7 +226,7 @@ public final class OpenClawChatSpeechController: ChatMediaPlaybackOwner {
             options: [.notifyOthersOnDeactivation])
         #endif
     }
-}
+
 
 /// Whole-clip playback for gateway-rendered container audio. File metadata
 /// helps AVAudioPlayer parse clips whose type is not obvious from the bytes.

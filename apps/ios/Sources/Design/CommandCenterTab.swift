@@ -4,7 +4,7 @@ import SwiftUI
 struct CommandCenterTab: View {
     static let recentSessionsFetchLimit = 200
 
-    @Environment(NodeAppModel.self) private var appModel
+    @EnvironmentObject private var appModel: NodeAppModel
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     var headerTitle: String = "OpenClaw"
@@ -65,7 +65,7 @@ struct CommandCenterTab: View {
                     .padding(.top, 18)
                     .padding(.bottom, 18)
                 }
-                .safeAreaPadding(.bottom, OpenClawProMetric.bottomScrollInset)
+                .backportSafeAreaPadding(.bottom, OpenClawProMetric.bottomScrollInset)
             }
         }
         .navigationTitle(self.headerTitle)
@@ -733,7 +733,7 @@ struct CommandCenterTab: View {
 }
 
 struct CommandSessionsScreen: View {
-    @Environment(NodeAppModel.self) private var appModel
+    @EnvironmentObject private var appModel: NodeAppModel
     @Environment(\.dismiss) private var dismiss
     private enum GroupEditor: Equatable {
         case rename(String)
@@ -765,7 +765,7 @@ struct CommandSessionsScreen: View {
                 .padding(.top, 16)
                 .padding(.bottom, 18)
             }
-            .safeAreaPadding(.bottom, OpenClawProMetric.bottomScrollInset)
+            .backportSafeAreaPadding(.bottom, OpenClawProMetric.bottomScrollInset)
         }
         .navigationTitle("Sessions")
         .navigationBarTitleDisplayMode(.inline)

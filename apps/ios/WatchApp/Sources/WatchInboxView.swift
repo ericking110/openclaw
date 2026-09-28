@@ -1202,10 +1202,10 @@ private struct WatchChatTimelineView: View {
         }
         .background(WatchClawStyle.background.ignoresSafeArea())
         .navigationTitle("Chat")
-        .onChange(of: self.store.chatCompletion) { _, _ in
+        .onChange(of: self.store.chatCompletion) { _ in
             self.handleCompletedVoiceTurn()
         }
-        .onChange(of: self.scenePhase) { _, phase in
+        .onChange(of: self.scenePhase) { phase in
             if phase == .active {
                 self.handleCompletedVoiceTurn()
                 self.scheduleVoiceReplyTimeout()

@@ -145,8 +145,8 @@ struct SidebarGatewayPicker: View {
 }
 
 struct RootSidebarGatewayControl: View {
-    @Environment(NodeAppModel.self) private var appModel
-    @Environment(GatewayConnectionController.self) private var gatewayController
+    @EnvironmentObject private var appModel: NodeAppModel
+    @EnvironmentObject private var gatewayController: GatewayConnectionController
     @State private var registry = GatewaySettingsStore.GatewayRegistry.empty
     @State private var switchError: String?
     let fallbackName: String

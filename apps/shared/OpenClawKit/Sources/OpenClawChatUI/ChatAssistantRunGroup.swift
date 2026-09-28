@@ -184,6 +184,13 @@ struct ChatAssistantRunFrame<Content: View>: View {
     }
 }
 
+private struct OpenclawassistantruncontentKey: EnvironmentKey {
+    static let defaultValue: Bool = false
+}
+
 extension EnvironmentValues {
-    @Entry var openClawAssistantRunContent: Bool = false
+    var openClawAssistantRunContent: Bool {
+        get { self[OpenclawassistantruncontentKey.self] }
+        set { self[OpenclawassistantruncontentKey.self] = newValue }
+    }
 }

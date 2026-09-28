@@ -1,7 +1,7 @@
 import SwiftUI
 
 private struct NotificationPermissionGuidanceDialogModifier: ViewModifier {
-    @Environment(NodeAppModel.self) private var appModel: NodeAppModel
+    @EnvironmentObject private var appModel: NodeAppModel: NodeAppModel
     let openNotifications: (String) -> Void
 
     func body(content: Content) -> some View {

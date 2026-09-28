@@ -39,7 +39,7 @@ struct AgentWorkspaceFilesScreen: View {
 }
 
 struct AgentWorkspaceDirectoryList: View {
-    @Environment(NodeAppModel.self) var appModel
+    @EnvironmentObject var appModel: NodeAppModel
     let agentId: String
     let path: String
 
@@ -215,7 +215,7 @@ struct AgentWorkspaceDirectoryList: View {
 }
 
 struct AgentWorkspaceFilePreview: View {
-    @Environment(NodeAppModel.self) var appModel
+    @EnvironmentObject var appModel: NodeAppModel
     let agentId: String
     let path: String
 

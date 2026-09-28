@@ -15,8 +15,8 @@ private enum OnboardingFocusedField: Hashable {
 }
 
 struct OnboardingWizardView: View {
-    @Environment(NodeAppModel.self) private var appModel: NodeAppModel
-    @Environment(GatewayConnectionController.self) private var gatewayController: GatewayConnectionController
+    @EnvironmentObject private var appModel: NodeAppModel: NodeAppModel
+    @EnvironmentObject private var gatewayController: GatewayConnectionController: GatewayConnectionController
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("node.instanceId") private var instanceId: String = UUID().uuidString
     @AppStorage("gateway.discovery.domain") private var discoveryDomain: String = ""
@@ -126,7 +126,7 @@ struct OnboardingWizardView: View {
 
     var body: some View {
         self.lifecycleContent
-            .onChange(of: self.scenePhase) { _, newValue in
+            .onChange(of: self.scenePhase) { newValue in
                 guard newValue == ScenePhase.active else { return }
                 self.applyPendingGatewaySetupLinkIfNeeded()
                 self.attemptAutomaticPairingResumeIfNeeded()
@@ -235,10 +235,10 @@ struct OnboardingWizardView: View {
             self.scannerResultHandoff.cancel()
             self.pendingTargetSuppression.resumeAutoConnect(controller: self.gatewayController)
         }
-        .onChange(of: self.discoveryDomain) { _, _ in
+        .onChange(of: self.discoveryDomain) { _ in
             self.scheduleDiscoveryRestart()
         }
-        .onChange(of: self.manualPortText) { _, newValue in
+        .onChange(of: self.manualPortText) { newValue in
             let digits = newValue.filter(\.isNumber)
             if digits != newValue {
                 self.manualPortText = digits
@@ -250,27 +250,27 @@ struct OnboardingWizardView: View {
             }
             self.manualPort = min(parsed, 65535)
         }
-        .onChange(of: self.manualPort) { _, newValue in
+        .onChange(of: self.manualPort) { newValue in
             let normalized = newValue > 0 ? String(newValue) : ""
             if self.manualPortText != normalized {
                 self.manualPortText = normalized
             }
         }
-        .onChange(of: self.setupCode) { _, newValue in
+        .onChange(of: self.setupCode) { newValue in
             guard !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
             self.qrCodeCompletion.cancel()
             self.clearStagedGatewaySetupLink()
         }
-        .onChange(of: self.appModel.lastGatewayProblem) { _, newValue in
+        .onChange(of: self.appModel.lastGatewayProblem) { newValue in
             self.updateConnectionIssue(problem: newValue, statusText: self.appModel.gatewayStatusText)
         }
-        .onChange(of: self.appModel.gatewayStatusText) { _, newValue in
+        .onChange(of: self.appModel.gatewayStatusText) { newValue in
             self.updateConnectionIssue(problem: self.appModel.lastGatewayProblem, statusText: newValue)
         }
-        .onChange(of: self.appModel.gatewaySetupRequestID) { _, _ in
+        .onChange(of: self.appModel.gatewaySetupRequestID) { _ in
             self.applyPendingGatewaySetupLinkIfNeeded()
         }
-        .onChange(of: self.appModel.gatewayServerName) { _, newValue in
+        .onChange(of: self.appModel.gatewayServerName) { newValue in
             guard newValue != nil, self.setupLinkStaging.link == nil else { return }
             let destination = self.qrCodeCompletion.destination(
                 connectedStableID: self.appModel.activeGatewayConnectConfig?.effectiveStableID)
@@ -332,7 +332,7 @@ struct OnboardingWizardView: View {
                     }
                 }
         }
-        .onChange(of: self.selectedPhoto) { _, newValue in
+        .onChange(of: self.selectedPhoto) { newValue in
             guard let item = newValue else { return }
             self.selectedPhoto = nil
             Task {

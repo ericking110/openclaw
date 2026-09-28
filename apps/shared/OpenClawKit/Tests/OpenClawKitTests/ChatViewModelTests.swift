@@ -1,5 +1,5 @@
 import Foundation
-import Observation
+import Combine
 import OpenClawKit
 import OpenClawProtocol
 import Testing

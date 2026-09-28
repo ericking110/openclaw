@@ -1,6 +1,5 @@
 import Foundation
 import GRDB
-import Observation
 import OpenClawProtocol
 import Testing
 import UIKit
@@ -1780,9 +1779,9 @@ private final class TimingOutDeviceStatusService: DeviceStatusServicing {
         await appModel.refreshPendingApprovalInbox()
         #expect(appModel.pendingApprovalAttentionRequests.count == 1)
         let retired = WatchApprovalReadbackProbe()
-        withObservationTracking {
+        backportObservationTracking({
             _ = appModel.pendingExecApprovalInboxItems
-        } onChange: {
+        }, onChange: {
             Task { await retired.record("expired") }
         }
         let deadline = ContinuousClock().now + .seconds(2)

@@ -3,7 +3,7 @@ import SwiftUI
 
 @MainActor
 struct ChatCommandPalette: View {
-    @Bindable var viewModel: OpenClawChatViewModel
+    @ObservedObject var viewModel: OpenClawChatViewModel
     let sections: [ChatSessionSidebarModel.Section]
     let additionalAttentionRequests: [OpenClawChatAttentionRequest]
     let preview: (OpenClawChatSessionEntry) -> String?
@@ -95,7 +95,7 @@ struct ChatCommandPalette: View {
                     }
                     .padding(8)
                 }
-                .onChange(of: selectedID) { _, id in
+                .onChange(of: selectedID) { id in
                     if let id { proxy.scrollTo(id) }
                 }
             }
@@ -110,7 +110,7 @@ struct ChatCommandPalette: View {
         .frame(width: 540, height: 440)
         .onAppear { self.isSearchFocused = true }
         .onExitCommand { self.dismiss() }
-        .onChange(of: self.query) { _, _ in self.selection = nil }
+        .onChange(of: self.query) { _ in self.selection = nil }
         .task(id: self.request) { await self.searchThreads() }
         .accessibilityIdentifier("chat-command-palette")
     }

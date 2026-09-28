@@ -397,12 +397,12 @@ struct ChatWorkingClawView: View {
         }
         .frame(width: 28, height: 24)
         .accessibilityHidden(true)
-        .onChange(of: self.scenePhase) { _, phase in
+        .onChange(of: self.scenePhase) { phase in
             if phase == .active {
                 self.animationStartedAt = Date()
             }
         }
-        .onChange(of: self.reduceMotion) { _, isReduced in
+        .onChange(of: self.reduceMotion) { isReduced in
             if !isReduced {
                 self.animationStartedAt = Date()
             }

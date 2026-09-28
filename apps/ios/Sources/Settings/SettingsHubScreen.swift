@@ -2,9 +2,9 @@ import OpenClawKit
 import SwiftUI
 
 struct SettingsHubScreen: View {
-    @Environment(NodeAppModel.self) private var appModel
-    @Environment(AppAppearanceModel.self) private var appearanceModel
-    @Environment(GatewayConnectionController.self) private var gatewayController
+    @EnvironmentObject private var appModel: NodeAppModel
+    @EnvironmentObject private var appearanceModel: AppAppearanceModel
+    @EnvironmentObject private var gatewayController: GatewayConnectionController
     @State private var embedCompatibility = DashboardEmbedCompatibility()
     @Binding var navigationPath: [SettingsRoute]
     var headerSidebarAction: OpenClawSidebarHeaderAction?

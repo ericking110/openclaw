@@ -269,12 +269,13 @@ public struct OpenClawChatView: View {
             self.viewModel.refreshSourceContext()
             self.viewModel.load()
         }
-        .onChange(of: ObjectIdentifier(self.viewModel)) { _, _ in
+        .onChange(of: ObjectIdentifier(self.viewModel)) { _ in
             self.viewModel.refreshSourceContext()
         }
-        .onChange(of: self.turnRecapObservation, initial: true) { _, observation in
+        .onChange(of: self.turnRecapObservation) { observation in
             self.updateTurnRecap(observation)
         }
+        .onAppear { self.updateTurnRecap(self.turnRecapObservation) }
         .sheet(item: self.$fullMessageRequest) { request in
             ChatFullMessageReader(
                 request: request,
@@ -302,7 +303,7 @@ extension OpenClawChatView {
                         selectedMessageID: self.$searchMessageID,
                         isPresented: self.$isSearchPresented,
                         onSelect: self.revealSearchMessage))
-                    .onChange(of: self.windowCommands?.composerFocusRequest) { _, _ in
+                    .onChange(of: self.windowCommands?.composerFocusRequest) { _ in
                         self.composerFocusRequest += 1
                     }
                     .onChange(of: self.searchMessageID) { previousID, _ in
@@ -338,7 +339,7 @@ extension OpenClawChatView {
         }
         .padding(.top, Layout.outerPaddingVertical)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { self.contentWidth = $0 }
+        .backportOnGeometryChange(for: CGFloat.self, of: { $0.size.width }, action: { self.contentWidth = $0 })
         .environment(\.openClawAssistantUsesReadingColumn, self.isTabletLayout)
     }
 
@@ -440,7 +441,7 @@ extension OpenClawChatView {
             .safeAreaInset(edge: .top, spacing: 0) {
                 self.messageListNoticeBanner(hasVisibleContent: hasVisibleContent)
             }
-            .onScrollGeometryChange(for: Bool.self) { geometry in
+            .backportOnScrollGeometryChange(for: Bool.self) { geometry in
                 let distanceFromBottom = geometry.contentSize.height - geometry.visibleRect.maxY
                 return distanceFromBottom <= Layout.liveEdgeThreshold
             } action: { _, isAtLiveEdge in
@@ -451,7 +452,7 @@ extension OpenClawChatView {
                     self.hasNewerContentBelow = false
                 }
             }
-            .onScrollPhaseChange { _, phase in
+            .backportOnScrollPhaseChange { _, phase in
                 guard self.hasPerformedInitialScroll else { return }
                 if phase == .interacting {
                     self.restoresLiveEdgeAfterKeyboardShows = false
@@ -494,13 +495,13 @@ extension OpenClawChatView {
             TapGesture().onEnded {
                 self.dismissKeyboardIfNeeded()
             })
-        .onChange(of: self.viewModel.isLoading) { _, isLoading in
+        .onChange(of: self.viewModel.isLoading) { isLoading in
             guard !isLoading, !self.hasPerformedInitialScroll else { return }
             self.restoreInitialScrollPosition()
             self.hasPerformedInitialScroll = true
             self.lastTurnStartID = self.latestVisibleTurnStartID
         }
-        .onChange(of: self.viewModel.currentSessionTarget) { _, _ in
+        .onChange(of: self.viewModel.currentSessionTarget) { _ in
             self.speech?.stop()
             self.scrollCommand.cancel()
             self.hasPerformedInitialScroll = false
@@ -510,7 +511,7 @@ extension OpenClawChatView {
             self.hasNewerContentBelow = false
             self.lastTurnStartID = nil
         }
-        .onChange(of: self.scenePhase) { _, newValue in
+        .onChange(of: self.scenePhase) { newValue in
             if newValue == .background {
                 self.speech?.stop()
             }
@@ -521,7 +522,7 @@ extension OpenClawChatView {
             self.speech?.stop()
             self.scrollCommand.cancel()
         }
-        .onChange(of: self.viewModel.timelineRevision) { _, _ in
+        .onChange(of: self.viewModel.timelineRevision) { _ in
             self.handleTimelineChange()
         }
         #if canImport(UIKit) && !os(macOS)
@@ -1509,7 +1510,7 @@ private struct ChatNoticeCard: View {
     let action: (() -> Void)?
 
     var body: some View {
-        ContentUnavailableView {
+        BackportContentUnavailableView {
             Label(self.title, systemImage: self.systemImage)
                 .font(OpenClawChatTypography.headline)
         } description: {

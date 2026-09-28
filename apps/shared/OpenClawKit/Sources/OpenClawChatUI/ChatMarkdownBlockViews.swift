@@ -84,7 +84,7 @@ struct ChatMathBlockView: View {
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(self.block.latex)
             }
-            .defaultScrollAnchor(.center)
+            .backportDefaultScrollAnchor()
             .frame(maxWidth: .infinity)
             .padding(.vertical, 4)
         } else {

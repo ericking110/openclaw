@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 struct GatewayDiscoveryDebugLogView: View {
-    @Environment(GatewayConnectionController.self) private var gatewayController
+    @EnvironmentObject private var gatewayController: GatewayConnectionController
     @AppStorage("gateway.discovery.debugLogs") private var debugLogsEnabled: Bool = false
 
     var body: some View {

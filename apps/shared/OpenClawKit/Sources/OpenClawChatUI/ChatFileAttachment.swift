@@ -79,7 +79,7 @@ struct ChatFileAttachment: View {
             guard self.requestID != nil else { return }
             await self.download()
         }
-        .onChange(of: self.resolverReady) { _, ready in
+        .onChange(of: self.resolverReady) { ready in
             if !ready { self.requestID = nil }
         }
         .alert("Unable to Download File", isPresented: self.$showsError) {

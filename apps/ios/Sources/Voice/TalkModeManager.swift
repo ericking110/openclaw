@@ -1,6 +1,6 @@
 import AVFAudio
 import Foundation
-import Observation
+import Combine
 import OpenClawChatUI
 import OpenClawKit
 import OpenClawProtocol
@@ -9,7 +9,7 @@ import Speech
 
 private final class StreamFailureBox: @unchecked Sendable {
     private let lock = NSLock()
-    private var valueInternal: Error?
+    @Published private var valueInternal: Error?
 
     func set(_ error: Error) {
         self.lock.lock()
@@ -67,8 +67,8 @@ private enum ChatCompletionState {
 }
 
 private struct ChatCompletionResult {
-    var state: ChatCompletionState
-    var assistantText: String?
+    @Published var state: ChatCompletionState
+    @Published var assistantText: String?
 }
 
 private struct TalkSpeechLanguageSelection: Equatable {
@@ -80,14 +80,14 @@ private struct TalkSpeechLanguageSelection: Equatable {
 
 @MainActor
 private final class TranscriptStreamingOwner {
-    var task: Task<Void, Never>?
-    var speechGeneration: Int?
-    var terminalStatus: (
+    @Published var task: Task<Void, Never>?
+    @Published var speechGeneration: Int?
+    @Published var terminalStatus: (
         text: String,
         phase: TalkPhase,
         watchPresentation: TalkWatchPresentation)?
     /// Subscribed before chat.send so a fast terminal cannot outrun its owner.
-    var completionEvents: AsyncStream<EventFrame>?
+    @Published var completionEvents: AsyncStream<EventFrame>?
 }
 
 private enum PushToTalkGatewayContext {
@@ -102,8 +102,8 @@ private enum PushToTalkGatewayContext {
 
 @MainActor
 private final class TalkPushToTalkOnceOperation {
-    private var result: OpenClawTalkPTTStopPayload?
-    private var continuation: CheckedContinuation<OpenClawTalkPTTStopPayload, Never>?
+    @Published private var result: OpenClawTalkPTTStopPayload?
+    @Published private var continuation: CheckedContinuation<OpenClawTalkPTTStopPayload, Never>?
 
     func wait() async -> OpenClawTalkPTTStopPayload {
         if let result {
@@ -124,7 +124,6 @@ private final class TalkPushToTalkOnceOperation {
 
 // swiftlint:disable type_body_length file_length
 @MainActor
-@Observable
 final class TalkModeManager: NSObject {
     private typealias SpeechRequest = SFSpeechAudioBufferRecognitionRequest
     private static let defaultModelIdFallback = "eleven_v3"
@@ -134,11 +133,11 @@ final class TalkModeManager: NSObject {
     private static let redactedConfigSentinel = "__OPENCLAW_REDACTED__"
     private static let realtimePrefetchExpiryLeewaySeconds: TimeInterval = 30
     private static let preferredInputDeviceIDKey = "talk.preferredInputDeviceID"
-    var isEnabled: Bool = false
-    var isListening: Bool = false
-    var isSpeaking: Bool = false
-    var isUserSpeechDetected: Bool = false
-    var isPushToTalkActive: Bool = false
+    @Published var isEnabled: Bool = false
+    @Published var isListening: Bool = false
+    @Published var isSpeaking: Bool = false
+    @Published var isUserSpeechDetected: Bool = false
+    @Published var isPushToTalkActive: Bool = false
     var hasActivePushToTalkSession: Bool {
         self.isPushToTalkActive || self.activePushToTalk != nil || self.finishingPushToTalk != nil
     }
@@ -152,30 +151,30 @@ final class TalkModeManager: NSObject {
     }
 
     /// 0..1-ish (not calibrated). Intended for UI feedback only.
-    var micLevel: Double = 0
+    @Published var micLevel: Double = 0
     /// Live agent playback envelope in 0...1 while speaking. nil means the active
     /// voice path exposes no real level (system voice, compressed streaming); the
     /// waveform then falls back to a synthetic pulse.
-    var playbackLevel: Double?
+    @Published var playbackLevel: Double?
     private(set) var preferredInputDeviceID: String?
-    var gatewayTalkConfigLoaded: Bool = false
-    var gatewayTalkApiKeyConfigured: Bool = false
-    var gatewayTalkDefaultModelId: String?
-    var gatewayTalkDefaultVoiceId: String?
-    var gatewayTalkProviderLabel: String = "Not loaded"
-    var gatewayTalkTransportLabel: String = "Not loaded"
-    var gatewayTalkUsesRealtime: Bool = false
-    var gatewayTalkRealtimeProviderLabel: String?
-    var gatewayTalkRealtimeModelId: String?
-    var gatewayTalkRealtimeVoiceId: String?
-    var gatewayTalkVoiceModeTitle: String = "Not loaded"
-    var gatewayTalkVoiceModeSubtitle: String?
-    var gatewayTalkVoiceModeAccessibilityValue: String = "Not loaded"
-    var gatewayTalkActiveModeTitle: String = .init(localized: "Not active")
-    var gatewayTalkActiveModeSubtitle: String?
-    var gatewayTalkLastIssueText: String?
-    var gatewayTalkCurrentFallbackIssue: TalkRuntimeIssue?
-    var gatewayTalkPermissionState: TalkGatewayPermissionState = .unknown
+    @Published var gatewayTalkConfigLoaded: Bool = false
+    @Published var gatewayTalkApiKeyConfigured: Bool = false
+    @Published var gatewayTalkDefaultModelId: String?
+    @Published var gatewayTalkDefaultVoiceId: String?
+    @Published var gatewayTalkProviderLabel: String = "Not loaded"
+    @Published var gatewayTalkTransportLabel: String = "Not loaded"
+    @Published var gatewayTalkUsesRealtime: Bool = false
+    @Published var gatewayTalkRealtimeProviderLabel: String?
+    @Published var gatewayTalkRealtimeModelId: String?
+    @Published var gatewayTalkRealtimeVoiceId: String?
+    @Published var gatewayTalkVoiceModeTitle: String = "Not loaded"
+    @Published var gatewayTalkVoiceModeSubtitle: String?
+    @Published var gatewayTalkVoiceModeAccessibilityValue: String = "Not loaded"
+    @Published var gatewayTalkActiveModeTitle: String = .init(localized: "Not active")
+    @Published var gatewayTalkActiveModeSubtitle: String?
+    @Published var gatewayTalkLastIssueText: String?
+    @Published var gatewayTalkCurrentFallbackIssue: TalkRuntimeIssue?
+    @Published var gatewayTalkPermissionState: TalkGatewayPermissionState = .unknown
 
     var isGatewayConnected: Bool {
         self.gatewayConnected
@@ -209,138 +208,138 @@ final class TalkModeManager: NSObject {
     private static let realtimeRestartDelaysNanoseconds: [UInt64] = [500_000_000, 2_000_000_000]
     private static let realtimeVoiceSessionCloseRetryDelaysNanoseconds: [UInt64] = [0, 500_000_000, 2_000_000_000]
 
-    private var isStarting = false
-    private var startAttemptID = 0
-    private var captureMode: CaptureMode = .idle
-    private var foregroundAudioCaptureAllowed = true
-    private var foregroundPushToTalkAllowed = true
-    private var activePushToTalk: ActivePushToTalk?
+    @Published private var isStarting = false
+    @Published private var startAttemptID = 0
+    @Published private var captureMode: CaptureMode = .idle
+    @Published private var foregroundAudioCaptureAllowed = true
+    @Published private var foregroundPushToTalkAllowed = true
+    @Published private var activePushToTalk: ActivePushToTalk?
     private var activePTTCaptureId: String? {
         self.activePushToTalk?.captureId
     }
 
-    private var finishingPushToTalk: FinishingPushToTalk?
-    private var transcriptProcessingGeneration: UInt64 = 0
-    private var continuousTranscriptProcessingGeneration: UInt64?
-    private var pttAudioOwnershipEndHandler: (@MainActor (String) -> Void)?
-    private var pttAutoStopEnabled: Bool = false
-    private var pttOnceOperations: [String: TalkPushToTalkOnceOperation] = [:]
-    private var pttTimeoutTask: Task<Void, Never>?
+    @Published private var finishingPushToTalk: FinishingPushToTalk?
+    @Published private var transcriptProcessingGeneration: UInt64 = 0
+    @Published private var continuousTranscriptProcessingGeneration: UInt64?
+    @Published private var pttAudioOwnershipEndHandler: (@MainActor (String) -> Void)?
+    @Published private var pttAutoStopEnabled: Bool = false
+    @Published private var pttOnceOperations: [String: TalkPushToTalkOnceOperation] = [:]
+    @Published private var pttTimeoutTask: Task<Void, Never>?
 
     private let allowSimulatorCapture: Bool
     private let gatewaySpeechSynthesizerOverride: (any TalkGatewaySpeechSynthesizing)?
     private let audioSessionDeactivationAction: (@MainActor () throws -> Void)?
-    private var audioSessionIsActive = false
+    @Published private var audioSessionIsActive = false
 
     private let audioEngine = AVAudioEngine()
-    private var inputTapInstalled = false
-    private var audioTapDiagnostics: AudioTapDiagnostics?
-    private var speechRecognizer: SFSpeechRecognizer?
-    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
-    private var recognitionTask: SFSpeechRecognitionTask?
-    private var recognitionGeneration: UInt64 = 0
-    private var silenceTask: Task<Void, Never>?
-    private var realtimeSession: TalkRealtimeWebRTCSession?
-    private var activeRealtimeVoiceSession: TalkRealtimeVoiceSessionOwner?
+    @Published private var inputTapInstalled = false
+    @Published private var audioTapDiagnostics: AudioTapDiagnostics?
+    @Published private var speechRecognizer: SFSpeechRecognizer?
+    @Published private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+    @Published private var recognitionTask: SFSpeechRecognitionTask?
+    @Published private var recognitionGeneration: UInt64 = 0
+    @Published private var silenceTask: Task<Void, Never>?
+    @Published private var realtimeSession: TalkRealtimeWebRTCSession?
+    @Published private var activeRealtimeVoiceSession: TalkRealtimeVoiceSessionOwner?
     private var activeRealtimeVoiceSessionId: String? {
         self.activeRealtimeVoiceSession?.voiceSessionId
     }
 
-    private var realtimeVoiceSessionGeneration: UInt64 = 0
+    @Published private var realtimeVoiceSessionGeneration: UInt64 = 0
     private let realtimeTranscriptStore = TalkRealtimeTranscriptStore()
-    private var realtimeSessionReadyAt: Date?
-    private var rapidRealtimeRestartCount = 0
-    private var bypassRealtimeOnNextStart = false
-    private var realtimeRestartGeneration = 0
-    private var realtimeRelaySession: RealtimeTalkRelaySession?
-    private var realtimeRelayStartGeneration: UInt64?
-    private var realtimeRelayGeneration: UInt64 = 0
-    private var prefetchedRealtimeSession: TalkRealtimeClientSession?
-    private var realtimePrefetchTask: Task<Void, Never>?
-    private var realtimePrefetchGeneration: UInt64 = 0
-    private var realtimeVoiceSelection: RealtimeTalkVoiceSelection?
-    private var realtimeVoiceSelectionRoute: GatewayNodeSessionRoute?
-    private var realtimeVoiceSelectionSubscription: GatewayServerEventSubscription?
-    private var realtimeVoiceSelectionEvents: Task<Void, Never>?
+    @Published private var realtimeSessionReadyAt: Date?
+    @Published private var rapidRealtimeRestartCount = 0
+    @Published private var bypassRealtimeOnNextStart = false
+    @Published private var realtimeRestartGeneration = 0
+    @Published private var realtimeRelaySession: RealtimeTalkRelaySession?
+    @Published private var realtimeRelayStartGeneration: UInt64?
+    @Published private var realtimeRelayGeneration: UInt64 = 0
+    @Published private var prefetchedRealtimeSession: TalkRealtimeClientSession?
+    @Published private var realtimePrefetchTask: Task<Void, Never>?
+    @Published private var realtimePrefetchGeneration: UInt64 = 0
+    @Published private var realtimeVoiceSelection: RealtimeTalkVoiceSelection?
+    @Published private var realtimeVoiceSelectionRoute: GatewayNodeSessionRoute?
+    @Published private var realtimeVoiceSelectionSubscription: GatewayServerEventSubscription?
+    @Published private var realtimeVoiceSelectionEvents: Task<Void, Never>?
 
-    private var lastHeard: Date?
-    private var lastTranscript: String = ""
-    private var loggedPartialThisCycle: Bool = false
-    private var lastSpokenText: String?
-    private var lastInterruptedAtSeconds: Double?
+    @Published private var lastHeard: Date?
+    @Published private var lastTranscript: String = ""
+    @Published private var loggedPartialThisCycle: Bool = false
+    @Published private var lastSpokenText: String?
+    @Published private var lastInterruptedAtSeconds: Double?
     // Presentation copy can change independently; the revision lets restart cleanup
     // replace only the status it published without interpreting localized text.
-    @ObservationIgnored private var speechErrorStatusRevisionPendingRestart: UInt64?
-    @ObservationIgnored private var statusRevision: UInt64 = 0
+    private var speechErrorStatusRevisionPendingRestart: UInt64?
+    private var statusRevision: UInt64 = 0
 
-    private var defaultVoiceId: String?
-    private var currentVoiceId: String?
-    private var defaultModelId: String?
-    private var currentModelId: String?
-    private var configuredProviderModelId: String?
-    private var voiceOverrideActive = false
-    private var modelOverrideActive = false
-    private var defaultOutputFormat: String?
-    private var executionMode: TalkModeExecutionMode = .native
-    private var runtimeRoute: TalkModeRuntimeRoute = .localElevenLabs
-    private var realtimeProvider: String?
-    private var realtimeModelId: String?
-    private var realtimeVoiceId: String?
-    private var configuredVoiceModeDescriptor = TalkVoiceModeDescriptor(
+    @Published private var defaultVoiceId: String?
+    @Published private var currentVoiceId: String?
+    @Published private var defaultModelId: String?
+    @Published private var currentModelId: String?
+    @Published private var configuredProviderModelId: String?
+    @Published private var voiceOverrideActive = false
+    @Published private var modelOverrideActive = false
+    @Published private var defaultOutputFormat: String?
+    @Published private var executionMode: TalkModeExecutionMode = .native
+    @Published private var runtimeRoute: TalkModeRuntimeRoute = .localElevenLabs
+    @Published private var realtimeProvider: String?
+    @Published private var realtimeModelId: String?
+    @Published private var realtimeVoiceId: String?
+    @Published private var configuredVoiceModeDescriptor = TalkVoiceModeDescriptor(
         title: String(localized: "Not loaded"),
         subtitle: nil)
-    private var pendingRealtimeIssue: TalkRuntimeIssue?
-    private var realtimeRelayStartIssue: TalkRuntimeIssue?
-    private var apiKey: String?
-    private var voiceAliases: [String: String] = [:]
-    private var interruptOnSpeech: Bool = true
-    private var gatewaySpeechLocaleID: String?
-    private var mainSessionKey: String = "main"
-    private var fallbackVoiceId: String?
-    private var lastPlaybackWasPCM: Bool = false
-    private var speechGeneration = 0
+    @Published private var pendingRealtimeIssue: TalkRuntimeIssue?
+    @Published private var realtimeRelayStartIssue: TalkRuntimeIssue?
+    @Published private var apiKey: String?
+    @Published private var voiceAliases: [String: String] = [:]
+    @Published private var interruptOnSpeech: Bool = true
+    @Published private var gatewaySpeechLocaleID: String?
+    @Published private var mainSessionKey: String = "main"
+    @Published private var fallbackVoiceId: String?
+    @Published private var lastPlaybackWasPCM: Bool = false
+    @Published private var speechGeneration = 0
     /// Set when the ElevenLabs API rejects PCM format (e.g. 403 subscription_required).
     /// Once set, all subsequent requests in this session use MP3 instead of re-trying PCM.
-    private var pcmFormatUnavailable: Bool = false
-    var pcmPlayer: PCMStreamingAudioPlaying = PCMStreamingAudioPlayer.shared
-    var mp3Player: StreamingAudioPlaying = StreamingAudioPlayer.shared
-    var bufferedPlayer: TalkBufferedAudioPlaying = TalkBufferedAudioPlayer.shared
+    @Published private var pcmFormatUnavailable: Bool = false
+    @Published var pcmPlayer: PCMStreamingAudioPlaying = PCMStreamingAudioPlayer.shared
+    @Published var mp3Player: StreamingAudioPlaying = StreamingAudioPlayer.shared
+    @Published var bufferedPlayer: TalkBufferedAudioPlaying = TalkBufferedAudioPlayer.shared
 
     /// Meters PCM speech bytes on their way into the streaming player so the
     /// speaking waveform tracks the audible envelope, not network arrival.
-    @ObservationIgnored private lazy var pcmPlaybackEnvelope = PCMPlaybackEnvelope { [weak self] level in
+    private lazy var pcmPlaybackEnvelope = PCMPlaybackEnvelope { [weak self] level in
         self?.playbackLevel = level
     }
 
-    private var gateway: GatewayNodeSession?
-    private var gatewayConnected = false
-    private var talkConfigLoadedAt: Date?
-    private var silenceWindow: TimeInterval = .init(TalkModeManager.defaultSilenceTimeoutMs) / 1000
-    private var lastAudioActivity: Date?
-    private var noiseFloorSamples: [Double] = []
-    private var noiseFloor: Double?
-    private var noiseFloorReady: Bool = false
+    @Published private var gateway: GatewayNodeSession?
+    @Published private var gatewayConnected = false
+    @Published private var talkConfigLoadedAt: Date?
+    @Published private var silenceWindow: TimeInterval = .init(TalkModeManager.defaultSilenceTimeoutMs) / 1000
+    @Published private var lastAudioActivity: Date?
+    @Published private var noiseFloorSamples: [Double] = []
+    @Published private var noiseFloor: Double?
+    @Published private var noiseFloorReady: Bool = false
 
-    private var incrementalSpeechQueue: [String] = []
-    private var incrementalSpeechTask: Task<Void, Never>?
-    private var incrementalSpeechTasksByGeneration: [Int: Task<Void, Never>] = [:]
-    private var incrementalSpeechActive = false
-    private var incrementalSpeechUsed = false
-    private var incrementalSpeechLanguages = TalkSpeechLanguageSelection(
+    @Published private var incrementalSpeechQueue: [String] = []
+    @Published private var incrementalSpeechTask: Task<Void, Never>?
+    @Published private var incrementalSpeechTasksByGeneration: [Int: Task<Void, Never>] = [:]
+    @Published private var incrementalSpeechActive = false
+    @Published private var incrementalSpeechUsed = false
+    @Published private var incrementalSpeechLanguages = TalkSpeechLanguageSelection(
         provider: nil,
         systemVoice: nil)
-    private var incrementalSpeechBuffer = IncrementalSpeechBuffer()
-    private var incrementalSpeechContext: IncrementalSpeechContext?
-    private var incrementalSpeechDirective: TalkDirective?
-    private var incrementalSpeechPrefetch: IncrementalSpeechPrefetchState?
-    private var incrementalSpeechPrefetchMonitorTask: Task<Void, Never>?
+    @Published private var incrementalSpeechBuffer = IncrementalSpeechBuffer()
+    @Published private var incrementalSpeechContext: IncrementalSpeechContext?
+    @Published private var incrementalSpeechDirective: TalkDirective?
+    @Published private var incrementalSpeechPrefetch: IncrementalSpeechPrefetchState?
+    @Published private var incrementalSpeechPrefetchMonitorTask: Task<Void, Never>?
 
     #if DEBUG
-    @ObservationIgnored private var testStartEntryHandler: (@MainActor () async -> Void)?
-    @ObservationIgnored private var testPTTFinalizerHandler: (@MainActor () async -> Void)?
-    @ObservationIgnored private var testPTTOnceStartedHandler: (@MainActor () async -> Void)?
-    @ObservationIgnored private var testPTTReservedHandler: (@MainActor () async -> Void)?
-    @ObservationIgnored private var testRealtimeVoiceSessionCloseRequest:
+    private var testStartEntryHandler: (@MainActor () async -> Void)?
+    private var testPTTFinalizerHandler: (@MainActor () async -> Void)?
+    private var testPTTOnceStartedHandler: (@MainActor () async -> Void)?
+    private var testPTTReservedHandler: (@MainActor () async -> Void)?
+    private var testRealtimeVoiceSessionCloseRequest:
         (@MainActor (_ method: String, _ paramsJSON: String?) async throws -> Void)?
     #endif
 
@@ -2053,7 +2052,7 @@ final class TalkModeManager: NSObject {
             }
         }
 
-        var assistantText = completion.assistantText
+        @Published var assistantText = completion.assistantText
         if assistantText == nil, shouldIncremental {
             let fallback = self.incrementalSpeechBuffer.latestText
             if !fallback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -2590,7 +2589,7 @@ final class TalkModeManager: NSObject {
         self.isSpeaking = false
         self.isUserSpeechDetected = false
         self.playbackLevel = nil
-        var failure: Error?
+        @Published var failure: Error?
         if let relay {
             do { try await relay.stopAndWait() } catch { failure = error }
         }
@@ -2772,7 +2771,7 @@ final class TalkModeManager: NSObject {
     private func closeLogicalRealtimeVoiceSessions() -> Task<Void, Never>? {
         // A close boundary invalidates every in-flight transport that captured the old owner.
         self.realtimeVoiceSessionGeneration &+= 1
-        var owners = [self.activeRealtimeVoiceSession].compactMap(\.self)
+        @Published var owners = [self.activeRealtimeVoiceSession].compactMap(\.self)
         if let transportOwner = self.realtimeSession?.voiceSessionOwner, !owners.contains(transportOwner) {
             owners.append(transportOwner)
         }
@@ -2813,7 +2812,7 @@ final class TalkModeManager: NSObject {
         },
         operation: @escaping @MainActor () async throws -> Void) async throws
     {
-        var finalError: Error?
+        @Published var finalError: Error?
         for delay in retryDelaysNanoseconds {
             if delay > 0 {
                 try await sleep(delay)
@@ -2955,7 +2954,7 @@ final class TalkModeManager: NSObject {
     {
         await withTaskGroup(of: ChatCompletionResult.self) { group in
             group.addTask { [runId] in
-                var latestAssistantText: String?
+                @Published var latestAssistantText: String?
                 for await evt in stream {
                     if Task.isCancelled {
                         return ChatCompletionResult(state: .timeout, assistantText: latestAssistantText)
@@ -3163,7 +3162,7 @@ final class TalkModeManager: NSObject {
                     rawStream,
                     sampleRate: TalkTTSValidation.pcmSampleRate(from: outputFormat))
                 { mp3Format in
-                    var mp3Request = request
+                    @Published var mp3Request = request
                     mp3Request.outputFormat = mp3Format
                     return client.streamSynthesize(voiceId: voiceId, request: mp3Request)
                 }
@@ -3575,7 +3574,7 @@ final class TalkModeManager: NSObject {
         let id = UUID()
         let task = Task { [weak self] in
             let stream = ElevenLabsTTSClient(apiKey: apiKey).streamSynthesize(voiceId: voiceId, request: request)
-            var chunks: [Data] = []
+            @Published var chunks: [Data] = []
             do {
                 for try await chunk in stream {
                     try Task.checkCancellation()
@@ -3877,7 +3876,7 @@ final class TalkModeManager: NSObject {
             rawStream,
             sampleRate: TalkTTSValidation.pcmSampleRate(from: playbackFormat))
         { mp3Format in
-            var mp3Request = request
+            @Published var mp3Request = request
             mp3Request.outputFormat = mp3Format
             return client.streamSynthesize(voiceId: voiceId, request: mp3Request)
         }
@@ -3902,7 +3901,7 @@ final class TalkModeManager: NSObject {
         let streamFailure = StreamFailureBox()
         let stream = Self.monitorStreamFailures(rawStream, failureBox: streamFailure)
         self.lastPlaybackWasPCM = true
-        var playback = await pcmPlayer.play(
+        @Published var playback = await pcmPlayer.play(
             stream: self.pcmPlaybackEnvelope.metering(stream, sampleRate: sampleRate),
             sampleRate: sampleRate)
         self.pcmPlaybackEnvelope.cancel()
@@ -3924,9 +3923,9 @@ private struct IncrementalSpeechBuffer {
 
     private(set) var latestText: String = ""
     private(set) var directive: TalkDirective?
-    private var spokenOffset: Int = 0
-    private var inCodeBlock = false
-    private var directiveParsed = false
+    @Published private var spokenOffset: Int = 0
+    @Published private var inCodeBlock = false
+    @Published private var directiveParsed = false
 
     mutating func ingest(text: String, isFinal: Bool) -> [String] {
         let normalized = text.replacingOccurrences(of: "\r\n", with: "\n")
@@ -3988,12 +3987,12 @@ private struct IncrementalSpeechBuffer {
     private mutating func extractSegments(isFinal: Bool) -> [String] {
         let chars = Array(latestText)
         guard self.spokenOffset < chars.count else { return [] }
-        var idx = self.spokenOffset
-        var lastBoundary: Int?
-        var inCodeBlock = self.inCodeBlock
-        var buffer = ""
-        var bufferAtBoundary = ""
-        var inCodeBlockAtBoundary = inCodeBlock
+        @Published var idx = self.spokenOffset
+        @Published var lastBoundary: Int?
+        @Published var inCodeBlock = self.inCodeBlock
+        @Published var buffer = ""
+        @Published var bufferAtBoundary = ""
+        @Published var inCodeBlockAtBoundary = inCodeBlock
 
         while idx < chars.count {
             if idx + 2 < chars.count,
@@ -4042,7 +4041,7 @@ private struct IncrementalSpeechBuffer {
     }
 }
 
-extension TalkModeManager {
+extension TalkModeManager: ObservableObject {
     func resolveVoiceId(
         preferred: String?,
         apiKey: String,
@@ -4694,10 +4693,10 @@ private final class AudioTapDiagnostics: @unchecked Sendable {
     private let label: String
     private let onLevel: (@Sendable (Float) -> Void)?
     private let lock = NSLock()
-    private var bufferCount: Int = 0
-    private var lastLoggedAt = Date.distantPast
-    private var lastLevelEmitAt = Date.distantPast
-    private var maxRmsWindow: Float = 0
+    @Published private var bufferCount: Int = 0
+    @Published private var lastLoggedAt = Date.distantPast
+    @Published private var lastLevelEmitAt = Date.distantPast
+    @Published private var maxRmsWindow: Float = 0
 
     init(label: String, onLevel: (@Sendable (Float) -> Void)? = nil) {
         self.label = label
@@ -4705,9 +4704,9 @@ private final class AudioTapDiagnostics: @unchecked Sendable {
     }
 
     func onBuffer(_ buffer: AVAudioPCMBuffer) {
-        var shouldLog = false
-        var shouldEmitLevel = false
-        var count = 0
+        @Published var shouldLog = false
+        @Published var shouldEmitLevel = false
+        @Published var count = 0
         self.lock.lock()
         self.bufferCount += 1
         count = self.bufferCount
@@ -5197,7 +5196,7 @@ private struct IncrementalSpeechContext: Equatable {
     let voiceId: String?
     let modelId: String?
     let outputFormat: String?
-    var language: String?
+    @Published var language: String?
     let directive: TalkDirective?
     let canUseElevenLabs: Bool
 }
@@ -5207,7 +5206,7 @@ private struct IncrementalSpeechPrefetchState {
     let segment: String
     let context: IncrementalSpeechContext
     let outputFormat: String?
-    var chunks: [Data]?
+    @Published var chunks: [Data]?
     let task: Task<Void, Never>
 }
 

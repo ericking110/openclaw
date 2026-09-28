@@ -1,15 +1,14 @@
 import Foundation
-import Observation
+import Combine
 
 @MainActor
-@Observable
-final class ChatSourcePreviewState {
-    private(set) var context: OpenClawChatSourceContext?
-    private(set) var revision = UUID()
-    private(set) var previews: [UUID: [ChatSourcePreview]] = [:]
-    @ObservationIgnored private var projector = ChatSourcePreviewProjector()
-    @ObservationIgnored private var messages: [OpenClawChatMessage] = []
-    @ObservationIgnored private var task: Task<Void, Never>?
+final class ChatSourcePreviewState: ObservableObject{
+    @Published private(set) var context: OpenClawChatSourceContext?
+    @Published private(set) var revision = UUID()
+    @Published private(set) var previews: [UUID: [ChatSourcePreview]] = [:]
+    private var projector = ChatSourcePreviewProjector()
+    private var messages: [OpenClawChatMessage] = []
+    private var task: Task<Void, Never>?
 
     func update(_ messages: [OpenClawChatMessage]) {
         self.messages = messages
@@ -35,7 +34,7 @@ final class ChatSourcePreviewState {
         self.context = nil
         self.update(self.messages)
     }
-}
+
 
 extension OpenClawChatViewModel {
     func refreshSourceContext() {

@@ -39,7 +39,7 @@ struct ChatSourcePreviewsView: View {
             .scrollIndicators(.hidden)
         }
         .accessibilityIdentifier("chat-source-previews")
-        .onChange(of: self.sources) { _, sources in
+        .onChange(of: self.sources) { sources in
             if let selected = self.selectedSource {
                 self.selectedSource = sources.first { $0.id == selected.id }
             }

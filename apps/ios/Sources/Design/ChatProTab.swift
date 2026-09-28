@@ -33,8 +33,8 @@ struct ChatProTab: View {
         case newSessionOptions
     }
 
-    @Environment(NodeAppModel.self) private var appModel
-    @Environment(GatewayConnectionController.self) private var gatewayController
+    @EnvironmentObject private var appModel: NodeAppModel
+    @EnvironmentObject private var gatewayController: GatewayConnectionController
     @AppStorage("openclaw.webchat.showAssistantTrace")
     private var showsAssistantTrace = true
     private var viewModel: OpenClawChatViewModel? {
@@ -173,7 +173,7 @@ struct ChatProTab: View {
                 .id(presentationID)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         } else {
-            ContentUnavailableView(
+            contentUnavailableView(
                 "Preparing Chat",
                 systemImage: "bubble.left.and.bubble.right",
                 description: Text("The session attaches once the gateway is ready.")

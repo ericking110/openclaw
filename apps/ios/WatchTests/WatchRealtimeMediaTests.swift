@@ -1,7 +1,6 @@
 import AVFAudio
 import Foundation
 import Network
-import Observation
 import OpenClawProtocol
 import Synchronization
 import Testing
@@ -103,9 +102,9 @@ struct WatchRealtimeMediaTests {
         controller.start(connection: connection, isCurrent: { current.withLock { $0 } })
         current.withLock { $0 = false }
         let changed = XCTestExpectation(description: "The queued call notices revoked admission")
-        withObservationTracking {
+        backportObservationTracking({
             _ = controller.state
-        } onChange: {
+        }, onChange: {
             changed.fulfill()
         }
 
