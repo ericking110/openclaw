@@ -56,6 +56,8 @@ async function createRealSession(
   const transport = new StdioClientTransport({
     command: options.command,
     args: options.args,
+    // The server's update check shells out to npm, which Bun-only installs lack.
+    env: { CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: "1" },
     stderr: "pipe",
   });
   const client = new Client(
