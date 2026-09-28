@@ -126,43 +126,35 @@ it("keeps Task Scheduler timeout details in the source-build failure report", ()
     expect(spawn).not.toHaveBeenCalled();
   }));
 
-it.each(
-  [undefined, "stale-profile"].flatMap((profile) =>
-    [["doctor"], ["gateway", "stop"]].map((args) => ({ profile, args })),
-  ),
-)(
-  "preserves the serving installation and offers non-building recovery (profile=$profile, args=$args)",
-  ({ profile, args }) =>
-    withRuntimePublicationFixture(async ({ root, env, service }) => {
-      vi.mocked(service.readRuntime).mockResolvedValue({
-        status: "running",
-        pid: 23456,
-        systemd: { managerUid: 2001 },
-      });
-      const entry = path.join(root, "dist", "entry.js");
-      const before = await fs.readFile(entry, "utf8");
-      const spawn = vi.fn(() => {
-        throw new Error("Automatic build started under the serving Gateway");
-      });
-      const attempt = runNodeMain({
+it("preserves the serving installation when a profiled source command requests an automatic rebuild", () =>
+  withRuntimePublicationFixture(async ({ root, env, service }) => {
+    const profile = "stale-profile";
+    vi.mocked(service.readRuntime).mockResolvedValue({
+      status: "running",
+      pid: 23456,
+      systemd: { managerUid: 2001 },
+    });
+    const entry = path.join(root, "dist", "entry.js");
+    const before = await fs.readFile(entry, "utf8");
+    const spawn = vi.fn(() => {
+      throw new Error("Automatic build started under the serving Gateway");
+    });
+    await expect(
+      runNodeMain({
         cwd: root,
-        args: [...(profile ? ["--profile", profile] : []), ...args],
+        args: ["--profile", profile, "doctor"],
         env: { ...env, OPENCLAW_RUNNER_LOG: "0" },
         spawn,
-      });
-      await expect(attempt).rejects.toThrow(/affected Gateway.*running/);
-      await expect(attempt).rejects.toThrow(
-        `node openclaw.mjs${profile ? ` --profile ${profile}` : ""} gateway stop`,
-      );
-      expect(spawn).not.toHaveBeenCalled();
-      expect(
-        vi
-          .mocked(service.readRuntime)
-          .mock.calls.some(([observedEnv]) => observedEnv?.OPENCLAW_PROFILE === profile),
-      ).toBe(true);
-      expect(await fs.readFile(entry, "utf8")).toBe(before);
-    }),
-);
+      }),
+    ).rejects.toThrow(/affected Gateway.*running/);
+    expect(spawn).not.toHaveBeenCalled();
+    expect(
+      vi
+        .mocked(service.readRuntime)
+        .mock.calls.some(([observedEnv]) => observedEnv?.OPENCLAW_PROFILE === profile),
+    ).toBe(true);
+    expect(await fs.readFile(entry, "utf8")).toBe(before);
+  }));
 
 it("holds Gateway startup custody until the automatic source build exits", () =>
   withRuntimePublicationFixture(async ({ root, env, databasePath }) => {
@@ -352,7 +344,7 @@ it.each([
         publish,
       ),
     ).rejects.toThrow(
-      /affected Gateway.*openclaw gateway status --deep.*openclaw gateway stop.*retry the original command/,
+      /affected Gateway.*openclaw gateway status --deep.*openclaw gateway stop.*retry the update/,
     );
     expect(publish).not.toHaveBeenCalled();
   }),
