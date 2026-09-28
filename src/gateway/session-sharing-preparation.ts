@@ -45,6 +45,7 @@ import type { GatewaySessionStoreTarget } from "./session-utils-store.types.js";
 type PreparedSessionSourceFacts = PreparedSessionMutationFacts & {
   /** Physical source retained by the same read custody as the sharing facts. */
   sourcePath?: string;
+  sourceAgentId?: string;
 };
 
 type ExistingSessionMutationFacts = PreparedSessionSourceFacts & {
@@ -278,6 +279,7 @@ export async function prepareSessionMutationFacts(
         }
         return {
           sourcePath: storePath,
+          sourceAgentId: agentId,
           target: {
             agentId,
             canonicalKey,
@@ -456,6 +458,7 @@ export async function prepareSessionMutationFacts(
         };
         facts = {
           sourcePath: sharing.source.path,
+          sourceAgentId: sharing.source.agentId,
           target,
           membership: new Set(
             sharing.members.find((member) => member.sessionKey === match.key)?.identityIds,
@@ -486,6 +489,7 @@ export async function prepareSessionMutationFacts(
           }
           return {
             sourcePath: sharing.source.path,
+            sourceAgentId: sharing.source.agentId,
             target: { ...target, entry: current.entry },
             membership: current.membership,
           };

@@ -1,3 +1,5 @@
+import type { AcpSessionControlConstraint } from "../acp/runtime/session-meta-control.types.js";
+import { readAcpSessionControlInWorker } from "../acp/runtime/session-meta-source.worker.js";
 import type { SqliteWorkerCommand } from "../infra/sqlite-worker-contract.js";
 import { requestSqliteWorkerOperationAdmission } from "../infra/sqlite-worker-operation-admission.js";
 import {
@@ -23,6 +25,7 @@ export type SessionStateWorkerOperations = {
       now: number;
       onlyIfWatched?: boolean;
       expectedUpstream?: SessionUpstreamLink;
+      acpControl?: AcpSessionControlConstraint;
     };
     output: { row?: SessionStateEventRow; notices: SessionStateNotice[] };
   };
@@ -40,7 +43,12 @@ export function executeSessionStateCommand(
       requestSqliteWorkerOperationAdmission({ stage: "commit", facts: undefined });
     }, options);
   }
-  const { event, now, onlyIfWatched, expectedUpstream } = command.input;
+  const { event, now, onlyIfWatched, expectedUpstream, acpControl } = command.input;
+  const assertAcpControl = () => {
+    if (acpControl && !readAcpSessionControlInWorker(options.database, acpControl).row) {
+      throw new Error("ACP task owner could not be verified.");
+    }
+  };
   const current = (db: OpenClawStateDatabase["db"]) =>
     (!onlyIfWatched || hasSessionStateWatchersInDatabase(db, event.sessionKey)) &&
     (!expectedUpstream || isSessionStateUpstreamCurrentInDatabase(db, expectedUpstream));
@@ -50,11 +58,13 @@ export function executeSessionStateCommand(
   }
   return runOpenClawStateWriteTransaction(({ db }) => {
     requestSqliteWorkerOperationAdmission({ stage: "transaction", facts: undefined });
+    assertAcpControl();
     if (!current(db)) {
       return { notices: [] };
     }
     const recorded = recordSessionStateEventInDatabase(db, event, now);
     requestSqliteWorkerOperationAdmission({ stage: "commit", facts: undefined });
+    assertAcpControl();
     return recorded;
   }, options);
 }
