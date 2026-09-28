@@ -537,6 +537,7 @@ export async function acquireGatewayLock(
       });
     if (!borrowedOwner) {
       projection = acquireFileLockSync(paths.stateLockPath, {
+        ...stateOwner.compromiseMonitor,
         lockPath: paths.stateLockPath,
         timeoutMs: 0,
         retry: { retries: 0 },

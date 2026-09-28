@@ -27,6 +27,16 @@ or `withOpenClawAgentDatabaseReadOnly` alone, does not move execution off thread
 `readWithCanonicalSessionAdmission` validates session reads on the executing
 thread; invoke it inside the worker's admitted reader.
 
+The dedicated shared-state read transport borrows monitored local process
+ownership: sidecar compromise checks run every second, and canonical owner-path
+resolutions expire after one second. Only these reads may observe an out-of-band
+ownership change or alias retarget within that interval. Release, cleanup, and
+schema-maintenance transitions invalidate cached paths immediately. Maintenance
+authority, physical database identity, and read lifecycle checks remain in place.
+Writes, schema transitions, lease grants, and all generic SQLite broker jobs
+retain immediate fresh ownership verification, including their transaction and
+commit grants. Schemas, retained data, and update behavior are unchanged.
+
 Channel setup awaits a fresh policy read after the agent-selection prompt.
 Deferred plugin migration rows are read by the shared-state worker, and setup
 rechecks its config owner after the read before using the selected agent. Each
