@@ -1,16 +1,15 @@
 import { linkReaderHovercardBootstrap as bootstrap } from "./link-reader-hovercard-registration.ts";
 import { isPreviewAnchor, resolveLinkReaderTarget } from "./link-reader-target.ts";
 
-export function previewTargetForAnchor(anchor: HTMLAnchorElement) {
-  if (!isPreviewAnchor(anchor)) {
-    return null;
-  }
-  const provider = bootstrap.providerFor(anchor);
+export function previewTargetForAnchor(
+  anchor: HTMLAnchorElement,
+  provider = bootstrap.providerFor(anchor),
+) {
   const target =
     provider?.client && provider.readers
       ? resolveLinkReaderTarget(anchor.href, provider.readers)
       : null;
-  return target?.reader.linkReader.previewMethod ? target : null;
+  return target?.reader.linkReader.previewMethod && isPreviewAnchor(anchor) ? target : null;
 }
 
 export async function prefetchLinkReader(

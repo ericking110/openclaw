@@ -1,8 +1,14 @@
 import { nothing } from "lit";
 import { AsyncDirective } from "lit/async-directive.js";
 import { directive, type ElementPart } from "lit/directive.js";
+import { composedParent } from "../lib/navigation-click.ts";
+import { linkReaderHovercardBootstrap as bootstrap } from "./link-reader-hovercard-registration.ts";
 import { prefetchLinkReader, previewTargetForAnchor } from "./link-reader-prefetch-request.ts";
-import { LINK_READER_HOVERCARD_PROVIDER_TAG, linkReaderTargetKey } from "./link-reader-target.ts";
+import {
+  LINK_READER_HOVERCARD_PROVIDER_TAG,
+  linkReaderTargetKey,
+  type HoverPreviewOwner,
+} from "./link-reader-target.ts";
 
 const PREFETCH_LIMIT = 8;
 const PREFETCH_DELAY_MS = 150;
@@ -25,6 +31,15 @@ class LinkReaderPrefetchDirective extends AsyncDirective {
   private pendingKey: string | undefined;
   private readonly observed = new Map<HTMLAnchorElement, { key: string; visible: boolean }>();
   private readonly attempted = new Set<string>();
+  private classifications = new WeakMap<
+    HTMLAnchorElement,
+    {
+      href: string;
+      readers: HoverPreviewOwner["readers"] | undefined;
+      key: string | null;
+    }
+  >();
+  private ancestors: { element: Element; classes: string | null }[] = [];
 
   render(_sessionKey: string, _active = true, _connected = true) {
     return nothing;
@@ -83,6 +98,8 @@ class LinkReaderPrefetchDirective extends AsyncDirective {
     this.mutations?.disconnect();
     this.mutations = null;
     this.observed.clear();
+    this.classifications = new WeakMap();
+    this.ancestors = [];
     clearTimeout(this.timer);
     this.timer = undefined;
     this.scope.abort();
@@ -135,30 +152,89 @@ class LinkReaderPrefetchDirective extends AsyncDirective {
         this.schedulePrefetch();
       });
       this.observer = observer;
-      this.mutations = new MutationObserver(() => this.scheduleScan());
+      this.mutations = new MutationObserver((records) => {
+        this.invalidateClassifications(records);
+        this.scheduleScan();
+      });
       this.mutations.observe(root, {
         childList: true,
         subtree: true,
         attributes: true,
-        attributeFilter: ["href"],
+        attributeFilter: [
+          "href",
+          "class",
+          "download",
+          "data-file-path",
+          "data-session-href",
+          "data-link-reader-external",
+          "slot",
+        ],
       });
     }
-    for (const [anchor, { key }] of this.observed) {
-      const target = previewTargetForAnchor(anchor);
-      if (!root.contains(anchor) || !target || linkReaderTargetKey(target) !== key) {
+    // A Lit update can queue this scan before mutation delivery. Consume those
+    // records first so moved links never reuse their former container's gate.
+    this.invalidateClassifications(this.mutations?.takeRecords() ?? []);
+    const ancestors: typeof this.ancestors = [];
+    for (let element: Element | null = root; element; element = composedParent(element)) {
+      ancestors.push({ element, classes: element.getAttribute("class") });
+    }
+    // Exclusions above the observed root can change between transcript scans.
+    if (
+      ancestors.length !== this.ancestors.length ||
+      ancestors.some(
+        ({ element, classes }, index) =>
+          element !== this.ancestors[index]?.element || classes !== this.ancestors[index]?.classes,
+      )
+    ) {
+      this.classifications = new WeakMap();
+    }
+    this.ancestors = ancestors;
+    for (const anchor of this.observed.keys()) {
+      if (!root.contains(anchor) || !anchor.hasAttribute("href")) {
         this.observer.unobserve(anchor);
         this.observed.delete(anchor);
       }
     }
     for (const anchor of root.querySelectorAll<HTMLAnchorElement>("a[href]")) {
-      const target = previewTargetForAnchor(anchor);
-      if (!target || this.observed.has(anchor)) {
-        continue;
+      // Nearest-provider lookup preserves nested ownership; reader identity also
+      // invalidates negative claims when a nested provider's capabilities change.
+      const provider = bootstrap.providerFor(anchor);
+      const readers = provider?.client ? provider.readers : undefined;
+      const href = anchor.href;
+      let classification = this.classifications.get(anchor);
+      if (!classification || classification.href !== href || classification.readers !== readers) {
+        const target = previewTargetForAnchor(anchor, provider);
+        classification = { href, readers, key: target ? linkReaderTargetKey(target) : null };
+        this.classifications.set(anchor, classification);
       }
-      const key = linkReaderTargetKey(target);
-      if (!this.attempted.has(key)) {
+      const { key } = classification;
+      const observed = this.observed.get(anchor);
+      if (observed && observed.key !== key) {
+        this.observer.unobserve(anchor);
+        this.observed.delete(anchor);
+      }
+      if (key && !this.observed.has(anchor) && !this.attempted.has(key)) {
         this.observed.set(anchor, { key, visible: false });
         this.observer.observe(anchor);
+      }
+    }
+  }
+
+  private invalidateClassifications(records: MutationRecord[]): void {
+    for (const record of records) {
+      const nodes =
+        record.type === "attributes"
+          ? [record.target]
+          : [...record.addedNodes, ...record.removedNodes];
+      for (const node of nodes) {
+        if (node instanceof HTMLAnchorElement) {
+          this.classifications.delete(node);
+        }
+        if (node instanceof Element) {
+          for (const anchor of node.querySelectorAll<HTMLAnchorElement>("a[href]")) {
+            this.classifications.delete(anchor);
+          }
+        }
       }
     }
   }
