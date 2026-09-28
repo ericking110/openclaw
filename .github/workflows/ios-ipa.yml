@@ -20,6 +20,12 @@ jobs:
           xcodebuild -version
           ls /Applications | grep -i xcode || true
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install Node dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline --ignore-scripts
+
       - name: Install xcodegen
         run: brew install xcodegen
 
