@@ -1,0 +1,80 @@
+import Foundation
+import OSLog
+
+/// Playback result for a streaming audio session.
+public struct StreamingPlaybackResult: Sendable {
+    /// True when playback completed without interruption.
+    public let finished: Bool
+    /// Timestamp in seconds where playback stopped, if interrupted.
+    public let interruptedAt: Double?
+
+    /// Creates a playback result.
+    public init(finished: Bool, interruptedAt: Double?) {
+        self.finished = finished
+        self.interruptedAt = interruptedAt
+    }
+}
+
+/// Plays streaming audio chunks using the shared AVAudioSession-backed player.
+@MainActor
+public final class StreamingAudioPlayer: NSObject {
+    /// Shared player instance.
+    public static let shared = StreamingAudioPlayer()
+
+    private let logger = Logger(subsystem: "com.steipete.clawdis", category: "talk.tts.stream")
+    private var playback: StreamingAudioPlayback?
+    private var streamTask: Task<Void, Never>?
+
+    /// Starts playing a streaming audio payload.
+    public func play(stream: AsyncThrowingStream<Data, Error>) async -> StreamingPlaybackResult {
+        stopInternal()
+
+        let playback = StreamingAudioPlayback(logger: logger)
+        self.playback = playback
+
+        let result = await withCheckedContinuation { continuation in
+            playback.setContinuation(continuation)
+            playback.start()
+
+            self.streamTask = Task.detached {
+                do {
+                    for try await chunk in stream {
+                        playback.append(chunk)
+                    }
+                    playback.finishInput()
+                } catch {
+                    playback.fail(error)
+                }
+            }
+        }
+        if self.playback === playback {
+            self.playback = nil
+            streamTask = nil
+        }
+        return result
+    }
+
+    /// Stops playback immediately and returns the interrupted timestamp.
+    public func stop() -> Double? {
+        guard let playback else { return nil }
+        streamTask?.cancel()
+        streamTask = nil
+        let interruptedAt = playback.stop(immediate: true)
+        finish(playback: playback, result: StreamingPlaybackResult(finished: false, interruptedAt: interruptedAt))
+        return interruptedAt
+    }
+
+    private func stopInternal() {
+        streamTask?.cancel()
+        streamTask = nil
+        guard let playback else { return }
+        let interruptedAt = playback.stop(immediate: true)
+        finish(playback: playback, result: StreamingPlaybackResult(finished: false, interruptedAt: interruptedAt))
+    }
+
+    private func finish(playback: StreamingAudioPlayback, result: StreamingPlaybackResult) {
+        playback.finish(result)
+        guard self.playback === playback else { return }
+        self.playback = nil
+    }
+}

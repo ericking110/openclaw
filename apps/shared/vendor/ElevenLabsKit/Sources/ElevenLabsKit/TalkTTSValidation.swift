@@ -1,0 +1,68 @@
+/// Validation helpers for ElevenLabs request parameters.
+public enum TalkTTSValidation: Sendable {
+    private static let v3StabilityValues: Set<Double> = [0.0, 0.5, 1.0]
+
+    /// Resolves a speed value from an explicit multiplier or words-per-minute.
+    public static func resolveSpeed(speed: Double?, rateWPM: Int?) -> Double? {
+        if let rateWPM, rateWPM > 0 {
+            let resolved = Double(rateWPM) / 175.0
+            if resolved < 0.7 || resolved > 1.2 {
+                return nil
+            }
+            return resolved
+        }
+        if let speed {
+            if speed < 0.7 || speed > 1.2 {
+                return nil
+            }
+            return speed
+        }
+        return nil
+    }
+
+    /// Clamps a 0–1 unit value.
+    public static func validatedUnit(_ value: Double?) -> Double? {
+        guard let value else { return nil }
+        if value < 0 || value > 1 {
+            return nil
+        }
+        return value
+    }
+
+    /// Validates stability based on model semantics.
+    public static func validatedStability(_ value: Double?, modelId: String?) -> Double? {
+        guard let value else { return nil }
+        let normalizedModel = (modelId ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if normalizedModel == "eleven_v3" {
+            return v3StabilityValues.contains(value) ? value : nil
+        }
+        return validatedUnit(value)
+    }
+
+    /// Validates a seed within UInt32 bounds.
+    public static func validatedSeed(_ value: Int?) -> UInt32? {
+        guard let value else { return nil }
+        if value < 0 || value > 4_294_967_295 {
+            return nil
+        }
+        return UInt32(value)
+    }
+
+    /// Validates streaming latency tier in range 0–4.
+    public static func validatedLatencyTier(_ value: Int?) -> Int? {
+        guard let value else { return nil }
+        if value < 0 || value > 4 {
+            return nil
+        }
+        return value
+    }
+
+    /// Extracts the PCM sample rate from an output format string.
+    public static func pcmSampleRate(from outputFormat: String?) -> Double? {
+        let trimmed = (outputFormat ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard trimmed.hasPrefix("pcm_") else { return nil }
+        let parts = trimmed.split(separator: "_", maxSplits: 1)
+        guard parts.count == 2, let rate = Double(parts[1]), rate > 0 else { return nil }
+        return rate
+    }
+}

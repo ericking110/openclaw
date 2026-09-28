@@ -6,6 +6,7 @@ on:
     paths:
       - 'apps/ios/**'
       - 'apps/shared/**'
+      - 'apps/swabble/**'
       - '.github/workflows/ios-ipa.yml'
   workflow_dispatch:
 

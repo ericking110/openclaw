@@ -5,7 +5,7 @@ import PackageDescription
 let package = Package(
     name: "OpenClawKit",
     platforms: [
-        .iOS(.v18),
+        .iOS(.v15),
         .macOS(.v15),
         .watchOS(.v11),
     ],
@@ -20,7 +20,7 @@ let package = Package(
         .default(enabledTraits: ["Talk"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/steipete/ElevenLabsKit", exact: "0.1.3"),
+        .package(path: "../vendor/ElevenLabsKit"),
         .package(url: "https://github.com/groue/GRDB.swift.git", exact: "7.11.1"),
         .package(url: "https://github.com/mgriebling/SwiftMath", exact: "1.7.3"),
         .package(url: "https://github.com/swiftlang/swift-markdown", exact: "0.8.0"),
