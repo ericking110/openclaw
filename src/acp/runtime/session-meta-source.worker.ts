@@ -8,10 +8,12 @@ import {
   matchesAcpSessionRuntimeLocator,
   resolveAcpSessionControlOwner,
 } from "./session-control-owner.js";
-import type { AcpSessionControlConstraint } from "./session-meta-control.types.js";
+import type {
+  AcpSessionControlConstraint,
+  AcpSessionSourceReadInput,
+} from "./session-meta-control.types.js";
 import { assertAcpSessionMutationEntry } from "./session-meta-entry.kernel.js";
 import { resolveReadableAcpSessionRow, selectAcpSessionRowForRead } from "./session-meta-keys.js";
-import type { AcpSessionSourceReadInput } from "./session-meta-write.types.js";
 
 /** Reuse the metadata writer's exact physical-source and lifecycle admission. */
 export function readAcpSessionSourceInWorker(

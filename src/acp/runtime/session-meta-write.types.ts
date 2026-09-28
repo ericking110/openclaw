@@ -1,7 +1,9 @@
 import type { SessionAcpMeta, SessionEntry } from "../../config/sessions/types.js";
-import type { DatabasePathIdentity } from "../../infra/sqlite-worker-identity.js";
 import type { AcpSessionControlBinding } from "./session-control-owner.js";
-import type { AcpSessionControlConstraint } from "./session-meta-control.types.js";
+import type {
+  AcpSessionControlConstraint,
+  AcpSessionSourceReadInput,
+} from "./session-meta-control.types.js";
 import type { AcpSessionReadInput } from "./session-meta-keys.js";
 
 export type AcpSessionMutationDecision =
@@ -17,20 +19,6 @@ export type AcpSessionMutationPreparation = {
   preparedEntry: SessionEntry;
 };
 
-type AcpSessionMutationSource = {
-  agentId: string;
-  path: string;
-  identity: DatabasePathIdentity;
-};
-
-export type AcpSessionSourceReadInput = {
-  source: AcpSessionMutationSource;
-  entry?: Pick<SessionEntry, "sessionId" | "lifecycleRevision" | "sessionStartedAt">;
-  sessionKey: string;
-  agentId: string;
-  expectedControlBinding?: AcpSessionControlBinding;
-};
-
 export type AcpSessionMutationCommit = {
   agentId: string;
   storageSessionKey: string;
@@ -40,7 +28,7 @@ export type AcpSessionMutationCommit = {
   currentRowSessionId?: string | null;
   updatedAt: number;
   decision: Exclude<AcpSessionMutationDecision, { kind: "keep" }>;
-  source: AcpSessionMutationSource;
+  source: AcpSessionSourceReadInput["source"];
   expectedControlBinding?: AcpSessionControlBinding;
   control?: AcpSessionControlConstraint;
 };
@@ -52,7 +40,7 @@ export type AcpSessionWriteOperations = {
       read: AcpSessionReadInput;
       entry?: SessionEntry;
       updatedAt: number;
-      source: AcpSessionMutationSource;
+      source: AcpSessionSourceReadInput["source"];
       sessionKey: string;
       agentId: string;
       expectedControlBinding?: AcpSessionControlBinding;
