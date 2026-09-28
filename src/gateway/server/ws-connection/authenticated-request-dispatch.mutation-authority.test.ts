@@ -215,6 +215,78 @@ describe("authenticated request mutation custody", () => {
     });
   });
 
+  it("keeps retained authority current when another identity's scopes change", async () => {
+    await withOpenClawTestState({ scenario: "minimal" }, async () => {
+      const identity = "retained@example.test";
+      const profile = ensureProfileForEmail(identity);
+      let committedConfig: OpenClawConfig = {
+        gateway: {
+          auth: {
+            identityScopes: {
+              [identity]: ["operator.admin"],
+              "other@example.test": ["operator.read"],
+            },
+          },
+        },
+      };
+      setRuntimeConfigSnapshot(committedConfig);
+      const client = createOperatorWsClient();
+      client.authenticatedUserId = identity;
+      client.authPolicyGeneration = resolveGatewayAuthPolicyGeneration(committedConfig, identity);
+      client.internal = { operatorRoleActor: { kind: "operator", profileId: profile.id } };
+      const context = createDirectChatContext({
+        getRuntimeConfig: () => committedConfig,
+        getCommittedRuntimeConfig: () => committedConfig,
+      });
+      context.resolveGatewayContext = () => context;
+      let captured: Awaited<ReturnType<typeof captureGatewayOperatorRunAuthority>>;
+      let guard: ReturnType<typeof readGatewayRequestMutationAuthority> | undefined;
+      const harness = createDispatchTestHarness({
+        buildRequestContext: () => context,
+        extraHandlers: {
+          "test.identity-scopes": async (options) => {
+            captured = await captureGatewayOperatorRunAuthority({
+              client: options.client,
+              context,
+              hasCurrentClientAuthority: options.hasCurrentClientAuthority,
+            });
+            guard = readGatewayRequestMutationAuthority(options);
+            options.respond(true, { accepted: true });
+          },
+        },
+      });
+      try {
+        await harness.dispatcher.dispatch(
+          { type: "req", id: "identity-scopes", method: "test.identity-scopes", params: {} },
+          client,
+        );
+        expect(harness.send).toHaveBeenLastCalledWith(
+          expect.objectContaining({ ok: true, payload: { accepted: true } }),
+        );
+        const { authority } = expectDefined(captured, "captured operator source");
+        const mutationGuard = expectDefined(guard, "request mutation guard");
+
+        committedConfig = structuredClone(committedConfig);
+        committedConfig.gateway!.auth!.identityScopes!["other@example.test"] = ["operator.admin"];
+        setRuntimeConfigSnapshot(committedConfig);
+        publishOperatorRoleConfigChange(context);
+        expect(authority.signal?.aborted).toBe(false);
+        expect(() => authority.assertCurrent()).not.toThrow();
+        expect(() => mutationGuard.assertCurrent()).not.toThrow();
+        expect(harness.close).not.toHaveBeenCalled();
+
+        committedConfig = structuredClone(committedConfig);
+        delete committedConfig.gateway!.auth!.identityScopes![identity];
+        setRuntimeConfigSnapshot(committedConfig);
+        publishOperatorRoleConfigChange(context);
+        expect(authority.signal?.aborted).toBe(true);
+        expect(() => authority.assertCurrent()).toThrow(/authority is no longer active/);
+      } finally {
+        captured?.release();
+      }
+    });
+  });
+
   it.each(["commit", "rollback", "revoke all", "policy commit", "policy rollback"] as const)(
     "retains the accepted source through tentative transport fencing until %s",
     async (outcome) => {
