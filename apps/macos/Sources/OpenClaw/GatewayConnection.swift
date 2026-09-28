@@ -1686,9 +1686,6 @@ extension GatewayConnection {
         ifCurrentRoute route: Route? = nil,
         distinguishPreDispatchRouteChange: Bool = false) async throws -> OpenClawChatSendResponse
     {
-        let ownershipScope = self.conversationOwnershipScope(sessionKey: sessionKey, agentID: agentID)
-        guard self.chatSendOwnership.beginNative(ownershipScope) else { throw OpenClawChatSendOwnershipError.webOwned }
-        defer { self.chatSendOwnership.endNative(ownershipScope) }
         let supportsSettingsCAS = if let route {
             await self.supportsServerCapability(
                 .sessionSettingsCAS,

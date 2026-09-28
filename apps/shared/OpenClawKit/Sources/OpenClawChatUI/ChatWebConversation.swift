@@ -98,6 +98,14 @@ extension OpenClawChatViewModel {
         self.hasDraftToSend || self.isAttachmentOwnerPinned || self.isSending || self.isSubmittingDraft
     }
 
+    public func hasPendingNativeConversationInput(for context: NativeConversationContext) -> Bool {
+        guard !self.hasPendingNativeConversationInput else { return true }
+        guard !self.matchesWebConversationContext(context) else { return false }
+        // Web-originated routes report their destination before native selection restores its draft.
+        let key = self.composerSessionKey(for: context.sessionKey, agentID: context.agentId)
+        return self.draftsBySession[key]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
     public func hasPendingNativeConversationWork() async -> Bool {
         if self.hasPendingNativeConversationInput { return true }
         guard let outbox else { return false }

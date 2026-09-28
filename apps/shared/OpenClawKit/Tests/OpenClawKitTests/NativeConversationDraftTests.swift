@@ -56,6 +56,36 @@ struct NativeConversationDraftTests {
         #expect(await model.hasPendingNativeConversationWork() == false)
     }
 
+    @Test @MainActor func `web links inspect the destination native draft before changing selection`() throws {
+        let suite = "NativeConversationDraftTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let owner = OpenClawWebConversation()
+        owner.mode = .native
+        let model = OpenClawChatViewModel(
+            sessionKey: "agent:main:thread-a", transport: OutboxTestTransport(healthy: false),
+            webConversation: owner, activeAgentId: "main", modelPickerStore: ChatModelPickerStore(defaults: defaults))
+        defer { model.detachTransport() }
+        let destination = NativeConversationContext(agentId: "main", sessionKey: model.sessionKey)
+        model.input = "Draft waiting in A"
+        model.switchSession(to: "agent:main:thread-b")
+        model.setWebConversationMode(.web)
+
+        #expect(model.input.isEmpty)
+        #expect(model.hasPendingNativeConversationInput(for: destination))
+        #expect(!model.hasPendingNativeConversationInput(for: .init(
+            agentId: "main", sessionKey: "agent:main:thread-c")))
+        #expect(!model.hasPendingNativeConversationInput(for: .init(
+            agentId: "research", sessionKey: "agent:research:thread-a")))
+        #expect(model.sessionKey == "agent:main:thread-b")
+
+        model.acceptWebRoute(destination)
+        #expect(model.input == "Draft waiting in A")
+        #expect(model.hasPendingNativeConversationInput(for: destination))
+        model.input = ""
+        #expect(!model.hasPendingNativeConversationInput(for: destination))
+    }
+
     @Test @MainActor func `attachment staging keeps native ownership while a web pane is selected`() async throws {
         let suite = "NativeConversationDraftTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
