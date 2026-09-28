@@ -38,6 +38,17 @@ function relayRecord(revision: number): NativeHookRelayBridgeRecord {
   };
 }
 
+function claimHistoricalProjection(stateDir: string) {
+  const { stateLockPath } = gatewayLock.resolveGatewayLockPaths({
+    ...process.env,
+    OPENCLAW_STATE_DIR: stateDir,
+  });
+  // Shipped Gateways know this exclusive sidecar, not the newer root lock.
+  const descriptor = fs.openSync(stateLockPath, "wx", 0o600);
+  fs.closeSync(descriptor);
+  fs.unlinkSync(stateLockPath);
+}
+
 afterEach(async () => {
   vi.restoreAllMocks();
   await closeOpenClawStateDatabaseAsync();
@@ -105,14 +116,7 @@ describe("Doctor maintenance with shared-state workers", () => {
                       await release();
                       try {
                         if (scenario === "historical-contender") {
-                          const { stateLockPath } = gatewayLock.resolveGatewayLockPaths({
-                            ...process.env,
-                            OPENCLAW_STATE_DIR: state.stateDir,
-                          });
-                          // Shipped Gateways know this exclusive sidecar, not the newer root lock.
-                          const descriptor = fs.openSync(stateLockPath, "wx", 0o600);
-                          fs.closeSync(descriptor);
-                          fs.unlinkSync(stateLockPath);
+                          claimHistoricalProjection(state.stateDir);
                         } else {
                           const contender = acquireGatewayStateOwner({
                             databasePath: path.join(state.stateDir, "state", "openclaw.sqlite"),
@@ -191,9 +195,32 @@ describe("Doctor maintenance with shared-state workers", () => {
                       }),
                     ).toEqual(relayRecord(1));
                   }
+                  if (scenario === "historical-contender") {
+                    expect(() => claimHistoricalProjection(state.stateDir)).toThrow(/EEXIST/);
+                    await writeNativeHookRelayBridgeRecord({
+                      record: relayRecord(2),
+                      updatedAtMs: 2,
+                    });
+                    expect(
+                      await executeOpenClawStateWorker(captureOpenClawStateWorkerContext(), {
+                        type: "nativeHookRelay.read",
+                        input: { relayId: "doctor" },
+                      }),
+                    ).toEqual(relayRecord(2));
+                    expect(() => claimHistoricalProjection(state.stateDir)).toThrow(/EEXIST/);
+                  }
                 });
               } finally {
                 await maintenance?.release();
+              }
+              if (scenario === "historical-contender") {
+                expect(() => claimHistoricalProjection(state.stateDir)).not.toThrow();
+                expect(
+                  await executeOpenClawStateWorker(captureOpenClawStateWorkerContext(), {
+                    type: "nativeHookRelay.read",
+                    input: { relayId: "doctor" },
+                  }),
+                ).toEqual(relayRecord(2));
               }
               if (databaseGenerations) {
                 expect(maintenance!.databaseWrites).toEqual({

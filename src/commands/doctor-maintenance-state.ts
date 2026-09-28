@@ -1,12 +1,7 @@
 import path from "node:path";
 import { resolveStateDir } from "../config/paths.js";
 import { resolveGatewayStateOwnerPath } from "../infra/gateway-state-owner.js";
-import {
-  resolvePendingLegacyStateDirMigrationPaths,
-  prepareLegacyStateDirMigration,
-} from "../infra/state-migrations.state-dir.js";
 import { createUpdateDoctorDatabaseWriteCapture } from "../infra/update-doctor-result.js";
-import { closeOpenClawAgentDatabasesAsync } from "../state/openclaw-agent-db-lifecycle.js";
 import {
   createOpenClawDatabaseMaintenanceScope,
   type OpenClawDatabaseMaintenanceScope,
@@ -106,11 +101,17 @@ export function createDoctorMaintenanceState(options: {
       await enterResources(acquired);
     },
     async relocateLegacyRoot() {
+      const { resolvePendingLegacyStateDirMigrationPaths, prepareLegacyStateDirMigration } =
+        await import("../infra/state-migrations.state-dir.js");
       const pending = resolvePendingLegacyStateDirMigrationPaths({ env });
       const sourceDir = resolveStateDir(env);
       if (!pending || path.resolve(sourceDir) !== path.resolve(pending.source)) {
         return;
       }
+      const { closeOpenClawAgentDatabasesAsync } =
+        await import("../state/openclaw-agent-db-lifecycle.js");
+      options.assertCurrent?.();
+      owner!.assertCurrent();
       const sourceDatabase = resolveOpenClawStateSqlitePath(env);
       // This runs before the long-lived Doctor callback: closing its own tracked
       // callback would self-wait. Include CLI/bootstrap resources predating this scope.

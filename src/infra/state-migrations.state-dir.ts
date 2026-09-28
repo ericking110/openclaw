@@ -339,16 +339,19 @@ function migrateLegacyStateDirRoot(
   const notices: string[] = [];
   const hasCustomStateDir = Boolean(env.OPENCLAW_STATE_DIR?.trim());
   const targetDir = hasCustomStateDir ? resolveStateDir(env, homedir) : resolveNewStateDir(homedir);
-
-  if (hasCustomStateDir) {
+  const finishMigration = (): StateDirMigrationResult => {
     selectPluginImport(targetDir);
     return {
       migrated: changes.length > 0,
-      skipped: changes.length === 0 && warnings.length === 0 && notices.length === 0,
+      skipped:
+        hasCustomStateDir && changes.length === 0 && warnings.length === 0 && notices.length === 0,
       changes,
       warnings,
       ...(notices.length > 0 ? { notices } : {}),
     };
+  };
+  if (hasCustomStateDir) {
+    return finishMigration();
   }
 
   const legacyDirs = resolveLegacyStateDirs(homedir);
@@ -366,15 +369,8 @@ function migrateLegacyStateDirRoot(
   } catch {
     legacyStat = null;
   }
-  if (!legacyStat) {
-    selectPluginImport(targetDir);
-    return {
-      migrated: changes.length > 0,
-      skipped: false,
-      changes,
-      warnings,
-      ...(notices.length > 0 ? { notices } : {}),
-    };
+  if (!legacyStat || !legacyDir) {
+    return finishMigration();
   }
   if (!legacyStat.isDirectory() && !legacyStat.isSymbolicLink()) {
     warnings.push(`Legacy state path is not a directory: ${legacyDir}`);
@@ -383,22 +379,13 @@ function migrateLegacyStateDirRoot(
 
   let symlinkDepth = 0;
   while (legacyStat.isSymbolicLink()) {
-    const legacyTarget = legacyDir ? resolveSymlinkTarget(legacyDir) : null;
+    const legacyTarget = resolveSymlinkTarget(legacyDir);
     if (!legacyTarget) {
-      warnings.push(
-        `Legacy state dir is a symlink (${legacyDir ?? "unknown"}); could not resolve target.`,
-      );
+      warnings.push(`Legacy state dir is a symlink (${legacyDir}); could not resolve target.`);
       return { migrated: false, skipped: false, changes, warnings };
     }
     if (path.resolve(legacyTarget) === path.resolve(targetDir)) {
-      selectPluginImport(targetDir);
-      return {
-        migrated: changes.length > 0,
-        skipped: false,
-        changes,
-        warnings,
-        ...(notices.length > 0 ? { notices } : {}),
-      };
+      return finishMigration();
     }
     if (legacyDirs.some((dir) => path.resolve(dir) === path.resolve(legacyTarget))) {
       legacyDir = legacyTarget;
@@ -423,23 +410,16 @@ function migrateLegacyStateDirRoot(
       continue;
     }
     warnings.push(
-      `Legacy state dir is a symlink (${legacyDir ?? "unknown"} → ${legacyTarget}); skipping auto-migration.`,
+      `Legacy state dir is a symlink (${legacyDir} → ${legacyTarget}); skipping auto-migration.`,
     );
     return { migrated: false, skipped: false, changes, warnings };
   }
 
   if (safeStatSync(targetDir)?.isDirectory()) {
-    if (legacyDir && isLegacyDirSymlinkMirror(legacyDir, targetDir)) {
-      selectPluginImport(targetDir);
-      return {
-        migrated: changes.length > 0,
-        skipped: false,
-        changes,
-        warnings,
-        ...(notices.length > 0 ? { notices } : {}),
-      };
+    if (isLegacyDirSymlinkMirror(legacyDir, targetDir)) {
+      return finishMigration();
     }
-    if (legacyDir && isEmptyDirPath(legacyDir)) {
+    if (isEmptyDirPath(legacyDir)) {
       try {
         // Empty residue has no state to merge. Link it so old clients cannot recreate split state.
         fs.rmdirSync(legacyDir);
@@ -453,50 +433,30 @@ function migrateLegacyStateDirRoot(
         `State dir migration skipped: target already exists (${targetDir}). Remove or merge manually.`,
       );
     }
-    selectPluginImport(targetDir);
-    return {
-      migrated: changes.length > 0,
-      skipped: false,
-      changes,
-      warnings,
-      ...(notices.length > 0 ? { notices } : {}),
-    };
+    return finishMigration();
   }
 
-  if (legacyDir) {
-    const pluginInstallWarning = withArtifactPreservingStateReads(() =>
-      preflightLegacyInstalledPluginIndexMigration({ stateDir: legacyDir }),
-    );
-    if (pluginInstallWarning) {
-      warnings.push(pluginInstallWarning);
-      return { migrated: false, skipped: false, changes, warnings };
-    }
-  }
-
-  try {
-    if (!legacyDir) {
-      throw new Error("Legacy state dir not found");
-    }
-    fs.renameSync(legacyDir, targetDir);
-  } catch (err) {
-    warnings.push(
-      `Failed to move legacy state dir (${legacyDir ?? "unknown"} → ${targetDir}): ${String(err)}`,
-    );
+  const pluginInstallWarning = withArtifactPreservingStateReads(() =>
+    preflightLegacyInstalledPluginIndexMigration({ stateDir: legacyDir }),
+  );
+  if (pluginInstallWarning) {
+    warnings.push(pluginInstallWarning);
     return { migrated: false, skipped: false, changes, warnings };
   }
 
   try {
-    if (!legacyDir) {
-      throw new Error("Legacy state dir not found");
-    }
+    fs.renameSync(legacyDir, targetDir);
+  } catch (err) {
+    warnings.push(`Failed to move legacy state dir (${legacyDir} → ${targetDir}): ${String(err)}`);
+    return { migrated: false, skipped: false, changes, warnings };
+  }
+
+  try {
     fs.symlinkSync(targetDir, legacyDir, "dir");
     changes.push(formatStateDirMigration(legacyDir, targetDir));
   } catch (err) {
     try {
       if (process.platform === "win32") {
-        if (!legacyDir) {
-          throw new Error("Legacy state dir not found", { cause: err });
-        }
         fs.symlinkSync(targetDir, legacyDir, "junction");
         changes.push(formatStateDirMigration(legacyDir, targetDir));
       } else {
@@ -504,9 +464,6 @@ function migrateLegacyStateDirRoot(
       }
     } catch (fallbackErr) {
       try {
-        if (!legacyDir) {
-          throw new Error("Legacy state dir not found", { cause: fallbackErr });
-        }
         fs.renameSync(targetDir, legacyDir);
         warnings.push(
           `State dir migration rolled back (failed to link legacy path): ${String(fallbackErr)}`,
@@ -514,22 +471,15 @@ function migrateLegacyStateDirRoot(
         return { migrated: false, skipped: false, changes: [], warnings };
       } catch (rollbackErr) {
         warnings.push(
-          `State dir moved but failed to link legacy path (${legacyDir ?? "unknown"} → ${targetDir}): ${String(fallbackErr)}`,
+          `State dir moved but failed to link legacy path (${legacyDir} → ${targetDir}): ${String(fallbackErr)}`,
         );
         warnings.push(
           `Rollback failed; set OPENCLAW_STATE_DIR=${targetDir} to avoid split state: ${String(rollbackErr)}`,
         );
-        changes.push(`State dir: ${legacyDir ?? "unknown"} → ${targetDir}`);
+        changes.push(`State dir: ${legacyDir} → ${targetDir}`);
       }
     }
   }
 
-  selectPluginImport(targetDir);
-  return {
-    migrated: changes.length > 0,
-    skipped: false,
-    changes,
-    warnings,
-    ...(notices.length > 0 ? { notices } : {}),
-  };
+  return finishMigration();
 }
