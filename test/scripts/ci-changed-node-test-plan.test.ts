@@ -44,7 +44,6 @@ import {
   resolveExtensionTestConfig,
 } from "../../scripts/lib/extension-test-plan.mts";
 import * as extensionTestPlan from "../../scripts/lib/extension-test-plan.mts";
-import { listVitestRuntimeConsumerFiles } from "../../scripts/lib/vitest-build-prerequisites.mts";
 import * as buildPrerequisites from "../../scripts/lib/vitest-build-prerequisites.mts";
 import { VITEST_PRETEST_BUILD_SECONDS } from "../../scripts/lib/vitest-shard-metadata.mts";
 import {
