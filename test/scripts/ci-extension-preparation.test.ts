@@ -33,8 +33,17 @@ const cases: Array<{
   seconds?: number;
 }> = [
   { name: "same preparation", second: {}, jobs: 1, seconds: runtimePreparationSeconds + 26 },
-  { name: "exact time bound", second: { predictedSeconds: 282 }, jobs: 1, seconds: 300 },
-  { name: "over time bound", second: { predictedSeconds: 283 }, jobs: 2 },
+  {
+    name: "exact time bound",
+    second: { predictedSeconds: 282, predictedTestSeconds: 222 },
+    jobs: 1,
+    seconds: 300,
+  },
+  {
+    name: "over time bound",
+    second: { predictedSeconds: 283, predictedTestSeconds: 223 },
+    jobs: 2,
+  },
   {
     name: "unprepared reader",
     second: { pretestBuildMode: undefined, predictedSeconds: 8 },
@@ -63,6 +72,7 @@ describe("extension preparation packing", () => {
         env: { OPENCLAW_NODE_TEST_VITEST_ARGS_JSON: '["--isolate"]' },
         pretestBuildMode: "runtime",
         predictedSeconds: runtimePreparationSeconds + 18,
+        predictedTestSeconds: 18,
         runner: "blacksmith-8vcpu-ubuntu-2404",
         requiresDist: false,
         planConcurrency: 1,
@@ -75,6 +85,7 @@ describe("extension preparation packing", () => {
         env: { OPENCLAW_NODE_TEST_VITEST_ARGS_JSON: '["--fileParallelism=false"]' },
         pretestBuildMode: "runtime",
         predictedSeconds: runtimePreparationSeconds + 8,
+        predictedTestSeconds: 8,
         runner: "blacksmith-8vcpu-ubuntu-2404",
         requiresDist: false,
         planConcurrency: 1,
