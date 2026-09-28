@@ -18,8 +18,7 @@ type SendMotionProbe = { frames: SendMotionFrame[]; jumps: number[]; stop: () =>
 async function observeSendMotion(page: Page, prompt: string) {
   await page.evaluate((text) => {
     const thread = document.querySelector<HTMLElement>(".chat-thread")!;
-    const originalScrollTo = thread.scrollTo;
-    const scrollTo = originalScrollTo.bind(thread);
+    const scrollTo = thread.scrollTo.bind(thread);
     const probe: SendMotionProbe = { frames: [], jumps: [], stop: () => {} };
     window.openclawSendMotion = probe;
     let firstBubble: HTMLElement | undefined;
@@ -50,7 +49,7 @@ async function observeSendMotion(page: Page, prompt: string) {
     };
     probe.stop = () => {
       cancelAnimationFrame(frame);
-      thread.scrollTo = originalScrollTo;
+      thread.scrollTo = scrollTo;
     };
     sample();
   }, prompt);
