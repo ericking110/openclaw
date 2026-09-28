@@ -742,7 +742,7 @@ final class ChatLinkPreviewModel: ObservableObject{
         guard !Task.isCancelled else { return }
         self.imageResult = result
     }
-
+}
 
 @MainActor
 struct ChatLinkPreview: View {

@@ -741,7 +741,7 @@ public final class OpenClawChatViewModel: ObservableObject{
     public var showsModelPicker: Bool {
         !self.modelChoices.isEmpty
     }
-
+}
 
 extension OpenClawChatViewModel {
     // MARK: - Internals

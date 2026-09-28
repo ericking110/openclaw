@@ -69,4 +69,4 @@ final class ChatSessionSidebarPreviews: ObservableObject{
         else { return nil }
         return self.previews[target]
     }
-
+}

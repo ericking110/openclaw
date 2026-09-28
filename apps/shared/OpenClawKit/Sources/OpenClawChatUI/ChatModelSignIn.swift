@@ -279,7 +279,7 @@ final class ChatModelSignInModel: ObservableObject{
         guard await self.context.isCurrent(), !self.closed else { throw CancellationError() }
         return data
     }
-
+}
 
 @MainActor
 struct OpenClawChatModelSignInSheet: View {

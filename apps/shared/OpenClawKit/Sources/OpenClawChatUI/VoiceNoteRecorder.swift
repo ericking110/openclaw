@@ -274,7 +274,7 @@ public final class OpenClawVoiceNoteRecorder: ObservableObject{
         FileManager.default.temporaryDirectory
             .appendingPathComponent("voice-note-\(UUID().uuidString).m4a")
     }
-
+}
 
 /// AVAudioRecorder-backed AAC voice-note capture.
 @MainActor

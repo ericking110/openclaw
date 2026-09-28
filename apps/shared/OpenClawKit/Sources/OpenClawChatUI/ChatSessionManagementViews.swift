@@ -544,7 +544,7 @@ final class ChatNewSessionAgentOptions: ObservableObject{
             if !Task.isCancelled { self.errorText = error.localizedDescription }
         }
     }
-
+}
 
 @MainActor
 public struct ChatNewSessionOptionsPopover: View {

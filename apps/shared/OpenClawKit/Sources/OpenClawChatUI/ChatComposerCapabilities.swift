@@ -215,4 +215,4 @@ final class OpenClawChatComposerCapabilityState: ObservableObject{
     @Published var isMutating = false
     @Published var notice: String?
     @Published var errorMessage: String?
-
+}

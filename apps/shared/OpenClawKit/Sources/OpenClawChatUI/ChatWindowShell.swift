@@ -13,7 +13,7 @@ public final class OpenClawChatWindowCommands: ObservableObject{
     @Published var findRequest = 0
 
     public init() {}
-
+}
 
 private struct OpenClawChatWindowCommandsKey: EnvironmentKey {
     static let defaultValue: OpenClawChatWindowCommands? = nil

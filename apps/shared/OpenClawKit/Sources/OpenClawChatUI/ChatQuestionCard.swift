@@ -310,7 +310,7 @@ public final class OpenClawQuestionCardModel: ObservableObject{
         encoder.outputFormatting = [.sortedKeys]
         return (try? encoder.encode(lhs)) == (try? encoder.encode(rhs))
     }
-
+}
 
 struct OpenClawQuestionCard: View {
     @ObservedObject private var model: OpenClawQuestionCardModel

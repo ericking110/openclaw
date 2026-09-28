@@ -226,7 +226,7 @@ public final class OpenClawChatSpeechController: ObservableObject{
             options: [.notifyOthersOnDeactivation])
         #endif
     }
-
+}
 
 /// Whole-clip playback for gateway-rendered container audio. File metadata
 /// helps AVAudioPlayer parse clips whose type is not obvious from the bytes.

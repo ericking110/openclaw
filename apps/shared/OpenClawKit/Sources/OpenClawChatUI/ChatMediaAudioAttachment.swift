@@ -359,7 +359,7 @@ final class ChatMediaAudioPlayer: ObservableObject{
             options: [.notifyOthersOnDeactivation])
         #endif
     }
-
+}
 
 // SDK 27 imports AVAudioPlayerDelegate with compatible isolation. Older SDKs
 // still need the preconcurrency bridge for this main-actor implementation.

@@ -34,7 +34,7 @@ final class ChatSourcePreviewState: ObservableObject{
         self.context = nil
         self.update(self.messages)
     }
-
+}
 
 extension OpenClawChatViewModel {
     func refreshSourceContext() {

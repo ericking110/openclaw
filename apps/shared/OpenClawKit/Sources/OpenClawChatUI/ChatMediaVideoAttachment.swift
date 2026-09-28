@@ -339,7 +339,7 @@ final class ChatMediaVideoPlayer: ObservableObject{
             return url
         }.value
     }
-
+}
 
 private enum ChatMediaVideoError: Error {
     case unsupportedMediaType
