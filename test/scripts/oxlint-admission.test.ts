@@ -118,21 +118,29 @@ it("does not mistake a bare plugin package name for the reviewed relative module
   }
 });
 
-it.for([false, true])(
-  "bounds advisory capture by bytes and respects stdout backpressure with evidence=%s",
-  async (evidence) => {
+it.for([false, true].flatMap((evidence) => [0, 1].map((status) => ({ evidence, status }))))(
+  "bounds advisory capture, preserves warnings, and respects stdout backpressure: %j",
+  async ({ evidence, status }) => {
     const root = createTempDir("oxlint-report-memory-");
     const config = path.join(root, "config.json");
     fs.writeFileSync(config, JSON.stringify({ rules: { "max-lines": "error" } }));
-    // Below the old character count, above the byte budget, and deliberately
-    // not JSON: overflowing output must stream rather than be parsed or certified.
-    const chunks = ["report:", "é".repeat(600_000)];
+    const summary = path.join(root, "summary.md");
+    // Multibyte output crosses the byte budget below the old character limit.
+    // A warning-only success must remain visible; malformed failures still stream.
+    const chunks =
+      status === 0
+        ? [
+            '{"diagnostics":[{"filename":"sample.ts","severity":"warning","code":"eslint(max-lines)","message":"',
+            `${"é".repeat(600_000)}"}]}`,
+          ]
+        : ["report:", "é".repeat(600_000)];
     const forwarded: string[] = [];
     const drains = process.stdout.listenerCount("drain");
     const writer = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
       forwarded.push(String(chunk));
       return false;
     });
+    const warnings = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(runSemanticCheck).mockImplementationOnce(async (options) => {
       const stdout = new PassThrough();
       const stderr = new PassThrough();
@@ -147,22 +155,30 @@ it.for([false, true])(
       stdout.end();
       stderr.end();
       await finished;
-      return 1;
+      return status;
     });
     try {
       expect(
         await runOxlint(["--config", config, "scripts/run-oxlint.mts"], {
           ...env,
           GITHUB_ACTIONS: "true",
+          GITHUB_STEP_SUMMARY: summary,
           OPENCLAW_CI_STATIC_EVIDENCE: evidence ? "1" : "0",
           OPENCLAW_CI_STATIC_EVIDENCE_ID: "bounded-report",
         }),
-      ).toEqual({ status: 1 });
+      ).toEqual({ status });
       expect(forwarded.join("")).toBe(chunks.join(""));
       expect(process.stdout.listenerCount("drain")).toBe(drains);
-      expect(fs.readdirSync(root)).toEqual(["config.json"]);
+      expect(warnings).toHaveBeenCalledWith(
+        expect.stringMatching(/::warning .*::The report exceeded 1 MiB/u),
+      );
+      expect(fs.readFileSync(summary, "utf8")).toContain(
+        "Individual advisory annotations and static evidence were skipped",
+      );
+      expect(fs.readdirSync(root)).toEqual(["config.json", "summary.md"]);
     } finally {
       writer.mockRestore();
+      warnings.mockRestore();
     }
   },
 );
