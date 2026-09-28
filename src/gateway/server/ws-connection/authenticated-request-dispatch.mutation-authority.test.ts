@@ -1,5 +1,5 @@
 import { expectDefined } from "@openclaw/normalization-core";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   assertOperatorModelAllowed,
   readAdmittedRunOperatorAuthority,
@@ -241,8 +241,13 @@ describe("authenticated request mutation custody", () => {
       context.resolveGatewayContext = () => context;
       let captured: Awaited<ReturnType<typeof captureGatewayOperatorRunAuthority>>;
       let guard: ReturnType<typeof readGatewayRequestMutationAuthority> | undefined;
+      const generation = new SharedGatewaySessionGenerationState({
+        current: undefined,
+        required: null,
+      });
       const harness = createDispatchTestHarness({
         buildRequestContext: () => context,
+        getRequiredSharedGatewaySessionGeneration: generation.reader,
         extraHandlers: {
           "test.identity-scopes": async (options) => {
             captured = await captureGatewayOperatorRunAuthority({
@@ -265,6 +270,7 @@ describe("authenticated request mutation custody", () => {
         );
         const { authority } = expectDefined(captured, "captured operator source");
         const mutationGuard = expectDefined(guard, "request mutation guard");
+        assert(mutationGuard.family === "worker");
 
         committedConfig = structuredClone(committedConfig);
         committedConfig.gateway!.auth!.identityScopes!["other@example.test"] = ["operator.admin"];
@@ -272,7 +278,7 @@ describe("authenticated request mutation custody", () => {
         publishOperatorRoleConfigChange(context);
         expect(authority.signal?.aborted).toBe(false);
         expect(() => authority.assertCurrent()).not.toThrow();
-        expect(() => mutationGuard.assertCurrent()).not.toThrow();
+        expect(() => mutationGuard.assertWorkerCurrent()).not.toThrow();
         expect(harness.close).not.toHaveBeenCalled();
 
         committedConfig = structuredClone(committedConfig);
@@ -281,6 +287,9 @@ describe("authenticated request mutation custody", () => {
         publishOperatorRoleConfigChange(context);
         expect(authority.signal?.aborted).toBe(true);
         expect(() => authority.assertCurrent()).toThrow(/authority is no longer active/);
+        expect(() => mutationGuard.assertWorkerCurrent()).toThrow(
+          /Gateway requester authority changed/,
+        );
       } finally {
         captured?.release();
       }
