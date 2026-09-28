@@ -83,6 +83,9 @@ struct NativeConversationViewModelTests {
         let fixture = try Fixture()
         defer { fixture.close() }
         let detail = NSView()
+        detail.setAccessibilityElement(true)
+        detail.setAccessibilityRole(.group)
+        detail.setAccessibilityIdentifier("conversation-detail-fixture")
         let hosting = NSHostingController(rootView: OpenClawChatWindowShell(
             viewModel: fixture.model,
             detailHost: AnyView(ConversationDetailFixture(view: detail)))
@@ -108,8 +111,10 @@ struct NativeConversationViewModelTests {
                 in: window, description: "the selected conversation layout")
             { elements in
                 let identity = elements.first { $0.accessibilityIdentifier?() == "chat-conversation-identity" }
-                let sidebar = elements.first { $0.accessibilityIdentifier?() == "chat-new-thread" }
-                return mode == .web ? (identity == nil ? sidebar : nil) : identity
+                guard mode == .web else { return identity }
+                guard identity == nil, detail.window === window,
+                      detail.bounds.width > 0, detail.bounds.height > 0 else { return nil }
+                return elements.first { $0.accessibilityIdentifier?() == "conversation-detail-fixture" }
             }
             let elements = try await AppKitTestSupport.accessibilityElements(in: window)
             let toolbar = try #require(elements.first { $0.accessibilityRole?() == .toolbar })
