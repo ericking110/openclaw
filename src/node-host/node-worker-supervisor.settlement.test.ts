@@ -309,7 +309,10 @@ it("settles retained startup cancellation without joining its own admission", as
   }
 });
 
-async function fixture(unknownOutcome = false) {
+async function fixture(
+  unknownOutcome = false,
+  admission?: { entered: () => void; ready: Promise<void> },
+) {
   mocks.inspectIdentity.mockReturnValue("live");
   const input = testWorkerLaunchInput("/synthetic/workspace", "settlement-turn");
   const identity = testNodeWorkerLaunchIdentity(input);
@@ -396,6 +399,8 @@ async function fixture(unknownOutcome = false) {
   mocks.turnClaim.mockImplementation(async ({ claim, ownerLaunchId }, authority) => {
     authority?.assertCurrent();
     turn = { ...currentLaunch(), ...claim, ownerLaunchId, state: "running" };
+    admission?.entered();
+    await admission?.ready;
     return { action: "start", receipt: currentTurn()! };
   });
   mocks.turnGet.mockImplementation(async (launchId) => {
@@ -500,12 +505,16 @@ async function fixture(unknownOutcome = false) {
     containerEngine: { id: "docker", command: "synthetic-container", target: "b".repeat(64) },
     onCapacityChanged: (snapshot) => snapshots.push(snapshot.available),
   });
-  await supervisor.launch(input, {
+  const launching = supervisor.launch(input, {
     kind: "websocket",
     url: `wss://gateway.example.invalid${WORKER_PUBLIC_INGRESS_PATH}`,
   });
+  if (!admission) {
+    await launching;
+  }
   return {
     supervisor,
+    launching,
     identity,
     persistence,
     entered,
@@ -600,6 +609,108 @@ function recoveryFixture(container = false) {
 }
 
 describe("node worker persistence settlement lifetime", () => {
+  it("follows journal admission into live turn settlement without waiting for the status deadline", async () => {
+    vi.useFakeTimers();
+    const admitted = createDeferred();
+    const release = createDeferred();
+    const controller = new AbortController();
+    const f = await fixture(false, { entered: () => admitted.resolve(), ready: release.promise });
+    const observed: NodeWorkerLaunchReceipt[] = [];
+    let waiting: Promise<unknown> | undefined;
+    try {
+      await admitted.promise;
+      waiting = f.supervisor
+        .status(f.identity.launchId, { waitMs: 20_000, signal: controller.signal })
+        .then((receipt) => {
+          if (receipt) observed.push(receipt);
+        });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(observed).toEqual([]);
+      release.resolve();
+      await f.launching;
+      f.emitResult.resolve();
+      await f.entered.promise;
+      f.persistence.resolve();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(observed).toEqual([expect.objectContaining({ state: "completed" })]);
+      await waiting;
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      controller.abort();
+      release.resolve();
+      await Promise.allSettled([waiting, f.launching]);
+      await f.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it("wakes status waiters only after the exact turn is journaled, independently of its retained child", async () => {
+    vi.useFakeTimers();
+    const f = await fixture();
+    try {
+      const observed: NodeWorkerLaunchReceipt[] = [];
+      const waiting = f.supervisor
+        .status(f.identity.launchId, { waitMs: 20_000 })
+        .then((receipt) => {
+          if (receipt) {
+            observed.push(receipt);
+          }
+          return receipt;
+        });
+      await vi.advanceTimersByTimeAsync(0);
+      f.emitResult.resolve();
+      await f.entered.promise;
+      await vi.advanceTimersByTimeAsync(0);
+      expect(observed).toEqual([]);
+      f.persistence.resolve();
+      await expect(waiting).resolves.toMatchObject({ state: "completed" });
+      expect(vi.getTimerCount()).toBe(0);
+      expect(f.snapshots.at(-1)).toBe(0);
+      expect(await f.supervisor.hasActiveWork()).toBe(true);
+      await expect(f.supervisor.status(f.identity.launchId, { waitMs: 20_000 })).resolves.toEqual(
+        observed[0],
+      );
+      await expect(
+        f.supervisor.status("unknown-turn", { waitMs: 20_000 }),
+      ).resolves.toBeUndefined();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      await f.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it.each(["timeout", "disconnect"] as const)(
+    "releases a status waiter on %s without cancelling the turn",
+    async (reason) => {
+      vi.useFakeTimers();
+      const f = await fixture();
+      const controller = new AbortController();
+      try {
+        const waiting = f.supervisor.status(f.identity.launchId, {
+          waitMs: 100,
+          signal: controller.signal,
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        if (reason === "timeout") {
+          await vi.advanceTimersByTimeAsync(100);
+          await expect(waiting).resolves.toMatchObject({ state: "running" });
+        } else {
+          const rejected = expect(waiting).rejects.toThrow("Operation aborted");
+          controller.abort();
+          await rejected;
+        }
+        expect(vi.getTimerCount()).toBe(0);
+        expect(mocks.turnFinish).not.toHaveBeenCalled();
+        expect(mocks.send).not.toHaveBeenCalled();
+        expect(f.snapshots.at(-1)).toBe(0);
+      } finally {
+        await f.dispose();
+        vi.useRealTimers();
+      }
+    },
+  );
+
   it.each(["ownership read", "terminal admission"] as const)(
     "retains the stale launch when recovery closes during %s",
     async (boundary) => {

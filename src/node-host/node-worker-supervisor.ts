@@ -1,5 +1,7 @@
 import path from "node:path";
 import { resolveStateDir } from "../config/paths.js";
+import { racePromiseWithAbortSignal } from "../infra/abort-signal.js";
+import { createDeferredCore } from "../shared/deferred.js";
 import {
   completeWorkerLaunchDescriptor,
   type WorkerLaunchDescriptor,
@@ -66,7 +68,7 @@ import {
   startNodeWorkerTurn,
   waitForNodeWorkerRetirement,
 } from "./node-worker-turn-lifecycle.js";
-import { NodeWorkerTurnStore } from "./node-worker-turn-store.js";
+import { NodeWorkerTurnStore, type NodeWorkerTurnReceipt } from "./node-worker-turn-store.js";
 import { NodeWorkerWorkspaceRuntime } from "./node-worker-workspace.js";
 
 const FORCE_STOP_WAIT_MS = 4_000;
@@ -381,7 +383,54 @@ class NodeWorkerSupervisor {
     }
   }
 
-  async status(launchId: string): Promise<NodeWorkerLaunchReceipt | undefined> {
+  async status(
+    launchId: string,
+    options?: { waitMs: number; signal?: AbortSignal },
+  ): Promise<NodeWorkerLaunchReceipt | undefined> {
+    options?.signal?.throwIfAborted();
+    let current = await this.readStatus(launchId);
+    if (!options || !current || (current.state !== "pending" && current.state !== "running")) {
+      return current;
+    }
+    const elapsed = createDeferredCore<boolean>();
+    const timer = setTimeout(() => elapsed.resolve(false), options.waitMs);
+    timer.unref();
+    try {
+      while (current && (current.state === "pending" || current.state === "running")) {
+        const turn: NodeWorkerActiveOwnership["turn"] = this.active.get(
+          current.ownerLaunchId,
+        )?.turn;
+        const admission = this.admissions.get(nodeWorkerEnvironmentKey(current));
+        // A journaled turn can precede its live owner. Follow admission into settlement.
+        const done: Promise<unknown> | undefined =
+          turn?.claim.launchId === launchId
+            ? turn.done
+            : admission?.launchId === launchId && admission.planHash === current.planHash
+              ? admission.done.catch(() => undefined)
+              : undefined;
+        // Completion can publish between the journal read and capturing the live owner.
+        current = await this.readStatus(launchId);
+        if (!current || (current.state !== "pending" && current.state !== "running")) {
+          break;
+        }
+        const notified: boolean = await racePromiseWithAbortSignal(
+          done ? Promise.race([done.then(() => true), elapsed.promise]) : elapsed.promise,
+          options.signal,
+        );
+        options.signal?.throwIfAborted();
+        // Settlement follows persistence; a timed-out observation also reconciles recovery.
+        current = await (notified ? this.turns.get(launchId) : this.readStatus(launchId));
+        if (!notified) {
+          break;
+        }
+      }
+      return current;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private async readStatus(launchId: string): Promise<NodeWorkerTurnReceipt | undefined> {
     if (this.closeCompleted) {
       return this.turns.get(launchId);
     }
