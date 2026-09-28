@@ -92,6 +92,8 @@ if (tool === "installer") {
     mode === "ambiguous-product" ? [product, product] : [other, product]));
 } else if (args.includes("test") && mode === "voice-tests-failed") {
   process.exit(25);
+} else if (args.includes("test") && args.includes("OpenClawUITests") && mode === "voice-ui-tests-failed") {
+  process.exit(26);
 } else if (args.includes("build-for-testing")) {
   const derivedIndex = args.indexOf("-derivedDataPath");
   if (derivedIndex >= 0) {
@@ -396,33 +398,55 @@ describe.skipIf(process.platform === "win32")("iOS Access simulator workflow", (
     }
   });
 
-  it("keeps full lifecycle and UI tests alongside Access tests in full validation", () => {
-    const { result, commands } = runSimulatorStep("voice", [prepareStep, iosStep], {
-      IOS_CI_PHASE: "tests",
-    });
-    expect(result.status, result.stderr).toBe(0);
-    const tests = commands.filter((command) => command.tool === "xcodebuild");
-    expect(tests).toHaveLength(2);
-    expect(tests[0]?.args).toEqual(
-      expect.arrayContaining([
-        ...authClasses.map((name) => `-only-testing:OpenClawTests/${name}`),
-        "-only-testing:OpenClawTests/ChatTypingFocusTests",
-        "-only-testing:OpenClawTests/ChatSendHydrationTests",
-        "-only-testing:OpenClawLogicTests/WatchVoiceTurnTrackerTests",
-        "-only-testing:OpenClawTests/NodeAppModelInvokeTests",
-        "-only-testing:OpenClawTests/OpenClawTypographyTests",
-      ]),
-    );
-    expect(tests[1]?.args).toContain(
-      "-only-testing:OpenClawUITests/OpenClawSnapshotUITests/testWatchMessageDeliveryIsReachableFromSettings",
-    );
-  });
+  it.each(["false", "true"])(
+    "keeps lifecycle and UI suites in manual validation with main=%s",
+    (main) => {
+      const { result, commands } = runSimulatorStep("voice", [prepareStep, iosStep], {
+        GITHUB_EVENT_NAME: "workflow_dispatch",
+        IOS_CI_PHASE: "tests",
+        IOS_MAIN_TIER: main,
+      });
+      expect(result.status, result.stderr).toBe(0);
+      const tests = commands.filter((command) => command.tool === "xcodebuild");
+      expect(tests).toHaveLength(2);
+      expect(tests[0]?.args).toEqual(
+        expect.arrayContaining([
+          ...authClasses.map((name) => `-only-testing:OpenClawTests/${name}`),
+          "-only-testing:OpenClawTests/ChatTypingFocusTests",
+          "-only-testing:OpenClawTests/ChatSendHydrationTests",
+          "-only-testing:OpenClawLogicTests/WatchVoiceTurnTrackerTests",
+          "-only-testing:OpenClawTests/NodeAppModelInvokeTests",
+          "-only-testing:OpenClawTests/OpenClawTypographyTests",
+        ]),
+      );
+      expect(
+        tests[0]?.args.includes("-only-testing:OpenClawTests/GatewayConnectionControllerTests"),
+      ).toBe(main === "true");
+      expect(tests[1]?.args.filter((arg) => arg.startsWith("-only-testing:"))).toEqual([
+        "-only-testing:OpenClawUITests/OpenClawSnapshotUITests/testWatchMessageDeliveryIsReachableFromSettings",
+        "-only-testing:OpenClawUITests/BootstrapSetupFailureUITests",
+      ]);
+      for (const test of tests) {
+        expect(test.args).toContain("platform=iOS Simulator,id=watch-fixture");
+      }
+      expect(tests[1]?.args).toContain(
+        "apps/ios/build/LifecycleTestResults/OpenClawWatchDeliveryUITests.xcresult",
+      );
+    },
+  );
 
-  it("fails on auth test errors before attempting later UI tests", () => {
-    const { result, commands } = runSimulatorStep("voice-tests-failed", [prepareStep, iosStep], {
+  it.each([
+    ["voice-tests-failed", "false", 25, 1],
+    ["voice-tests-failed", "true", 25, 1],
+    ["voice-ui-tests-failed", "false", 26, 2],
+    ["voice-ui-tests-failed", "true", 26, 2],
+  ] as const)("preserves %s with main=%s", (mode, main, exitCode, count) => {
+    const { result, commands } = runSimulatorStep(mode, [prepareStep, iosStep], {
+      GITHUB_EVENT_NAME: "workflow_dispatch",
       IOS_CI_PHASE: "tests",
+      IOS_MAIN_TIER: main,
     });
-    expect(result.status).toBe(25);
-    expect(commands.filter((command) => command.tool === "xcodebuild")).toHaveLength(1);
+    expect(result.status).toBe(exitCode);
+    expect(commands.filter((command) => command.tool === "xcodebuild")).toHaveLength(count);
   });
 });

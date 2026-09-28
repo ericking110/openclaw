@@ -6456,7 +6456,7 @@ jobs:
 
       # Compile-only smoke cannot verify native Access crypto or session ownership.
       # Hourly and full validation also exercise the app and notification lifecycles.
-      # Only full validation launches the Watch-delivery UI runner.
+      # Full validation runs Watch-delivery and bootstrap-refusal UI cases together.
       - name: Run focused iOS lifecycle simulator tests
         id: ios_lifecycle_tests
         if: (matrix.phase == 'smoke' || matrix.phase == 'tests') && needs.preflight.outputs.compatibility_target != 'true'
@@ -6489,6 +6489,9 @@ jobs:
               -only-testing:OpenClawTests/TraceHeadingVisualProofTests
             )
           fi
+          if [[ "${GITHUB_EVENT_NAME:-}" == "workflow_dispatch" && "$IOS_CI_PHASE" == "tests" && "$IOS_MAIN_TIER" == "true" ]]; then
+            test_args+=(-only-testing:OpenClawTests/GatewayConnectionControllerTests)
+          fi
           diagnostic_collection=on-failure
           if [[ "$IOS_CI_PHASE" == "smoke" || "$IOS_MAIN_TIER" == "true" ]]; then
             diagnostic_collection=never
@@ -6503,7 +6506,7 @@ jobs:
             -collect-test-diagnostics "$diagnostic_collection" \
             "${test_args[@]}" \
             test
-          if [[ "$IOS_CI_PHASE" == "tests" && "$IOS_MAIN_TIER" != "true" ]]; then
+          if [[ "$IOS_CI_PHASE" == "tests" && ( "$IOS_MAIN_TIER" != "true" || "${GITHUB_EVENT_NAME:-}" == "workflow_dispatch" ) ]]; then
             run_apple_command_logged apps/ios/build/LifecycleTestResults/OpenClawWatchDeliveryUITests.log xcodebuild \
               -project apps/ios/OpenClaw.xcodeproj \
               -scheme OpenClawUITests \
@@ -6512,6 +6515,7 @@ jobs:
               -resultBundlePath apps/ios/build/LifecycleTestResults/OpenClawWatchDeliveryUITests.xcresult \
               -parallel-testing-enabled NO \
               -only-testing:OpenClawUITests/OpenClawSnapshotUITests/testWatchMessageDeliveryIsReachableFromSettings \
+              -only-testing:OpenClawUITests/BootstrapSetupFailureUITests \
               test
           fi
 
