@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'apps/ios/**'
+      - 'apps/shared/**'
       - '.github/workflows/ios-ipa.yml'
   workflow_dispatch:
 
